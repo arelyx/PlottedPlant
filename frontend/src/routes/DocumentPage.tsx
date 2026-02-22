@@ -103,6 +103,7 @@ export function DocumentPage() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("connecting");
   const [collaborators, setCollaborators] = useState<CollaboratorInfo[]>([]);
   const collabSessionRef = useRef<CollaborationSession | null>(null);
+  const syncedRef = useRef(false);
 
   // Content ref — tracks Y.Text value for rendering and export
   const contentRef = useRef("");
@@ -210,6 +211,8 @@ export function DocumentPage() {
   useEffect(() => {
     if (!doc || !authUser || isNaN(documentId)) return;
 
+    syncedRef.current = false;
+
     const session = createCollaborationSession(
       documentId,
       { id: authUser.id, name: authUser.display_name },
@@ -222,12 +225,21 @@ export function DocumentPage() {
           setCollaborators(collabs);
         },
         onSynced() {
-          // Once synced, trigger initial render from Y.Text content
+          syncedRef.current = true;
+
+          // Trigger initial render from Y.Text content
           const text = session.ytext.toString();
           if (text) {
             contentRef.current = text;
             setLineCount(text.split("\n").length);
             triggerRender(text);
+          }
+
+          // Bind to Monaco editor now that Y.Text has content from the server.
+          // Deferring until onSynced avoids binding to an empty Y.Text which
+          // would clear the editor via monacoModel.setValue("").
+          if (editorRef.current && !session.binding) {
+            bindMonacoEditor(session, editorRef.current);
           }
         },
       },
@@ -248,6 +260,7 @@ export function DocumentPage() {
       session.ytext.unobserve(ytextObserver);
       session.destroy();
       collabSessionRef.current = null;
+      syncedRef.current = false;
     };
   }, [doc, authUser, documentId, triggerRender]);
 
@@ -305,9 +318,11 @@ export function DocumentPage() {
       () => setShowHistory((prev) => !prev)
     );
 
-    // Bind y-monaco to the editor
+    // Bind y-monaco to the editor only if the collaboration session has
+    // already synced. If not synced yet, the onSynced callback will create
+    // the binding once Y.Text has content from the server.
     const session = collabSessionRef.current;
-    if (session) {
+    if (session && !session.binding && syncedRef.current) {
       bindMonacoEditor(session, editor);
     }
   };
