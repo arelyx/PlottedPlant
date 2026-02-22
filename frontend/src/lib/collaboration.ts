@@ -72,7 +72,7 @@ export function createCollaborationSession(
   // Determine WebSocket URL
   // In dev, the Vite proxy or Nginx routes /collaboration/ to Hocuspocus
   const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${wsProtocol}//${window.location.host}/collaboration`;
+  const wsUrl = `${wsProtocol}//${window.location.host}/collaboration/`;
 
   const provider = new HocuspocusProvider({
     url: wsUrl,
