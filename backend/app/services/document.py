@@ -7,8 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.document import Document
 from app.models.document_content import DocumentContent
+from app.models.document_share import DocumentShare
 from app.models.document_version import DocumentVersion
 from app.models.folder import Folder
+from app.models.folder_share import FolderShare
 from app.models.user import User
 
 
@@ -21,8 +23,6 @@ async def resolve_document_permission(
     """Resolve the effective permission for a user on a document.
 
     Priority: owner > direct document share > folder share.
-    Sharing tables (document_shares, folder_shares) are not yet created —
-    they come in Step 7. For now, only ownership is checked.
     Returns None if no access.
     """
     result = await db.execute(
@@ -36,7 +36,29 @@ async def resolve_document_permission(
     if owner_id == user_id:
         return "owner"
 
-    # TODO (Step 7): Check document_shares, then folder_shares
+    # Check document_shares
+    ds_result = await db.execute(
+        select(DocumentShare.permission).where(
+            DocumentShare.document_id == document_id,
+            DocumentShare.shared_with_id == user_id,
+        )
+    )
+    ds_perm = ds_result.scalar_one_or_none()
+    if ds_perm is not None:
+        return ds_perm
+
+    # Check folder_shares (if document is in a folder)
+    if folder_id is not None:
+        fs_result = await db.execute(
+            select(FolderShare.permission).where(
+                FolderShare.folder_id == folder_id,
+                FolderShare.shared_with_id == user_id,
+            )
+        )
+        fs_perm = fs_result.scalar_one_or_none()
+        if fs_perm is not None:
+            return fs_perm
+
     return None
 
 
@@ -46,7 +68,6 @@ async def resolve_folder_permission(
     """Resolve the effective permission for a user on a folder.
 
     Priority: owner > folder share.
-    Sharing tables are not yet created — only ownership is checked.
     """
     result = await db.execute(
         select(Folder.owner_id).where(Folder.id == folder_id)
@@ -58,7 +79,17 @@ async def resolve_folder_permission(
     if row == user_id:
         return "owner"
 
-    # TODO (Step 7): Check folder_shares
+    # Check folder_shares
+    fs_result = await db.execute(
+        select(FolderShare.permission).where(
+            FolderShare.folder_id == folder_id,
+            FolderShare.shared_with_id == user_id,
+        )
+    )
+    fs_perm = fs_result.scalar_one_or_none()
+    if fs_perm is not None:
+        return fs_perm
+
     return None
 
 
@@ -139,6 +170,44 @@ async def create_version(
     )
 
     return new_version_number
+
+
+async def is_document_shared(db: AsyncSession, document_id: int) -> bool:
+    """Check if a document has any active shares (user shares or public links)."""
+    from app.models.public_share_link import PublicShareLink
+
+    ds_result = await db.execute(
+        select(func.count()).where(DocumentShare.document_id == document_id)
+    )
+    if ds_result.scalar_one() > 0:
+        return True
+
+    pl_result = await db.execute(
+        select(func.count()).where(
+            PublicShareLink.document_id == document_id,
+            PublicShareLink.is_active.is_(True),
+        )
+    )
+    return pl_result.scalar_one() > 0
+
+
+async def is_folder_shared(db: AsyncSession, folder_id: int) -> bool:
+    """Check if a folder has any active shares."""
+    from app.models.public_share_link import PublicShareLink
+
+    fs_result = await db.execute(
+        select(func.count()).where(FolderShare.folder_id == folder_id)
+    )
+    if fs_result.scalar_one() > 0:
+        return True
+
+    pl_result = await db.execute(
+        select(func.count()).where(
+            PublicShareLink.folder_id == folder_id,
+            PublicShareLink.is_active.is_(True),
+        )
+    )
+    return pl_result.scalar_one() > 0
 
 
 async def get_user_brief(db: AsyncSession, user_id: int) -> dict | None:

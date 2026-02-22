@@ -16,3 +16,6 @@ from app.models.document import Document  # noqa: E402, F401
 from app.models.document_content import DocumentContent  # noqa: E402, F401
 from app.models.document_version import DocumentVersion  # noqa: E402, F401
 from app.models.template import Template  # noqa: E402, F401
+from app.models.document_share import DocumentShare  # noqa: E402, F401
+from app.models.folder_share import FolderShare  # noqa: E402, F401
+from app.models.public_share_link import PublicShareLink  # noqa: E402, F401
