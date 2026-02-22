@@ -24,6 +24,7 @@ class UserSearchResponse(BaseModel):
     id: int
     username: str
     display_name: str
+    email: str
     avatar_url: str | None
 
     model_config = {"from_attributes": True}
