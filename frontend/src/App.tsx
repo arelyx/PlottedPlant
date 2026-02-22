@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthLayout } from "@/layouts/AuthLayout";
 import { AppLayout } from "@/layouts/AppLayout";
 import { AuthGuard } from "@/components/AuthGuard";
@@ -13,6 +14,7 @@ import { SharedDocumentPage } from "@/routes/SharedDocumentPage";
 
 function App() {
   return (
+    <TooltipProvider>
     <BrowserRouter>
       <Routes>
         {/* Public auth routes */}
@@ -44,6 +46,7 @@ function App() {
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
+    </TooltipProvider>
   );
 }
 
