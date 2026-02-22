@@ -3,7 +3,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from app.config import settings
-from app.routers import auth, documents, export, folders, health, internal, render, users
+from app.routers import (
+    auth,
+    documents,
+    export,
+    folders,
+    health,
+    internal,
+    preferences,
+    render,
+    templates,
+    users,
+)
 
 app = FastAPI(
     title="PlantUML IDE API",
@@ -30,6 +41,8 @@ app.include_router(folders.router)
 app.include_router(documents.router)
 app.include_router(render.router)
 app.include_router(export.router)
+app.include_router(templates.router)
+app.include_router(preferences.router)
 app.include_router(internal.router)
 
 
