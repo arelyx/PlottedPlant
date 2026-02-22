@@ -7,6 +7,7 @@ import { RegisterPage } from "@/routes/RegisterPage";
 import { ForgotPasswordPage } from "@/routes/ForgotPasswordPage";
 import { ResetPasswordPage } from "@/routes/ResetPasswordPage";
 import { DashboardPage } from "@/routes/DashboardPage";
+import { DocumentPage } from "@/routes/DocumentPage";
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
           }
         >
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/documents/:id" element={<DocumentPage />} />
         </Route>
 
         {/* Root redirect */}
