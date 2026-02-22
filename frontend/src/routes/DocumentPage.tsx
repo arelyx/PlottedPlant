@@ -23,8 +23,11 @@ import {
   type DocumentDetail,
 } from "@/lib/documents";
 import { api } from "@/lib/api";
+import { DiffEditor } from "@monaco-editor/react";
 import { usePreferencesStore } from "@/stores/preferences";
 import { EditorSettingsPopover } from "@/components/EditorSettingsPopover";
+import { VersionHistoryPanel } from "@/components/VersionHistoryPanel";
+import type { VersionDiff } from "@/lib/versions";
 
 // --- Types ---
 
@@ -102,6 +105,11 @@ export function DocumentPage() {
   const [renderTime, setRenderTime] = useState<number | null>(null);
   const renderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const renderAbortRef = useRef<AbortController | null>(null);
+
+  // History state
+  const [showHistory, setShowHistory] = useState(false);
+  const [previewVersion, setPreviewVersion] = useState<{ content: string; number: number } | null>(null);
+  const [diffData, setDiffData] = useState<VersionDiff | null>(null);
 
   // Editor state
   const [viewMode, setViewMode] = useState<ViewMode>("split");
@@ -287,6 +295,12 @@ export function DocumentPage() {
       saveContent(contentRef.current);
     });
 
+    // Ctrl+Shift+H to toggle history panel
+    editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyH,
+      () => setShowHistory((prev) => !prev)
+    );
+
     // Trigger initial render
     triggerRender(contentRef.current);
   };
@@ -439,119 +453,237 @@ export function DocumentPage() {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {!isReadOnly && (
+            <Button
+              variant={showHistory ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => {
+                setShowHistory((prev) => !prev);
+                if (showHistory) {
+                  setPreviewVersion(null);
+                  setDiffData(null);
+                }
+              }}
+            >
+              History
+            </Button>
+          )}
+
           <EditorSettingsPopover />
         </div>
       </div>
 
-      {/* Editor + Preview */}
-      <div className="flex-1 overflow-hidden">
-        <PanelGroup direction="horizontal">
-          {viewMode !== "preview" && (
-            <>
-              <Panel defaultSize={50} minSize={20}>
-                <Editor
-                  height="100%"
-                  language="plantuml"
-                  theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
-                  value={content}
-                  onChange={handleContentChange}
-                  onMount={handleEditorMount}
-                  options={{
-                    readOnly: isReadOnly,
-                    minimap: { enabled: preferences.editor_minimap },
-                    fontSize: preferences.editor_font_size,
-                    lineNumbers: "on",
-                    wordWrap: preferences.editor_word_wrap ? "on" : "off",
-                    scrollBeyondLastLine: false,
-                    automaticLayout: true,
-                    tabSize: 2,
-                    renderLineHighlight: "line",
-                    bracketPairColorization: { enabled: true },
-                    padding: { top: 8 },
-                  }}
-                />
-              </Panel>
-              {viewMode === "split" && (
-                <PanelResizeHandle className="w-1.5 bg-border hover:bg-primary/20 transition-colors" />
-              )}
-            </>
-          )}
-          {viewMode !== "editor" && (
-            <Panel defaultSize={50} minSize={20}>
-              <div className="h-full flex flex-col bg-muted/30">
-                {/* Preview toolbar */}
-                <div className="flex items-center gap-1 px-2 py-1 border-b text-xs">
-                  <button
-                    className="px-2 py-0.5 rounded hover:bg-accent"
-                    onClick={() => setZoom((z) => Math.min(z + 25, 400))}
-                  >
-                    +
-                  </button>
-                  <span className="min-w-[3rem] text-center">{zoom}%</span>
-                  <button
-                    className="px-2 py-0.5 rounded hover:bg-accent"
-                    onClick={() => setZoom((z) => Math.max(z - 25, 25))}
-                  >
-                    -
-                  </button>
-                  <button
-                    className="px-2 py-0.5 rounded hover:bg-accent ml-1"
-                    onClick={() => setZoom(100)}
-                  >
-                    Reset
-                  </button>
-                  {rendering && (
-                    <span className="ml-auto text-muted-foreground">Rendering...</span>
-                  )}
-                </div>
+      {/* Preview version banner */}
+      {previewVersion && (
+        <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted shrink-0">
+          <span className="text-xs">
+            Viewing version {previewVersion.number} (read-only)
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs h-6"
+            onClick={() => setPreviewVersion(null)}
+          >
+            Exit Preview
+          </Button>
+        </div>
+      )}
 
-                {/* Preview content */}
-                <div className="flex-1 overflow-auto p-4">
-                  {renderError && !lastGoodSvg ? (
-                    <div className="flex items-center justify-center h-full">
-                      <div className="text-center text-muted-foreground">
-                        <p className="text-sm font-medium text-destructive mb-1">
-                          {renderError.message}
-                        </p>
-                        {renderError.line && (
-                          <p className="text-xs">Error on line {renderError.line}</p>
-                        )}
-                      </div>
+      {/* Diff banner */}
+      {diffData && (
+        <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted shrink-0">
+          <span className="text-xs">
+            Comparing v{diffData.base_version} with v{diffData.compare_version}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs h-6"
+            onClick={() => setDiffData(null)}
+          >
+            Close Diff
+          </Button>
+        </div>
+      )}
+
+      {/* Main content area: editor/preview + optional history panel */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Editor + Preview (or diff view) */}
+        <div className="flex-1 overflow-hidden">
+          {diffData ? (
+            /* Diff view */
+            <DiffEditor
+              height="100%"
+              language="plantuml"
+              theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
+              original={diffData.base_content}
+              modified={diffData.compare_content}
+              options={{
+                readOnly: true,
+                renderSideBySide: true,
+                fontSize: preferences.editor_font_size,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                automaticLayout: true,
+              }}
+            />
+          ) : (
+            <PanelGroup direction="horizontal">
+              {viewMode !== "preview" && (
+                <>
+                  <Panel defaultSize={50} minSize={20}>
+                    {previewVersion ? (
+                      <Editor
+                        height="100%"
+                        language="plantuml"
+                        theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
+                        value={previewVersion.content}
+                        options={{
+                          readOnly: true,
+                          minimap: { enabled: preferences.editor_minimap },
+                          fontSize: preferences.editor_font_size,
+                          lineNumbers: "on",
+                          wordWrap: preferences.editor_word_wrap ? "on" : "off",
+                          scrollBeyondLastLine: false,
+                          automaticLayout: true,
+                          padding: { top: 8 },
+                        }}
+                      />
+                    ) : (
+                      <Editor
+                        height="100%"
+                        language="plantuml"
+                        theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
+                        value={content}
+                        onChange={handleContentChange}
+                        onMount={handleEditorMount}
+                        options={{
+                          readOnly: isReadOnly,
+                          minimap: { enabled: preferences.editor_minimap },
+                          fontSize: preferences.editor_font_size,
+                          lineNumbers: "on",
+                          wordWrap: preferences.editor_word_wrap ? "on" : "off",
+                          scrollBeyondLastLine: false,
+                          automaticLayout: true,
+                          tabSize: 2,
+                          renderLineHighlight: "line",
+                          bracketPairColorization: { enabled: true },
+                          padding: { top: 8 },
+                        }}
+                      />
+                    )}
+                  </Panel>
+                  {viewMode === "split" && (
+                    <PanelResizeHandle className="w-1.5 bg-border hover:bg-primary/20 transition-colors" />
+                  )}
+                </>
+              )}
+              {viewMode !== "editor" && (
+                <Panel defaultSize={50} minSize={20}>
+                  <div className="h-full flex flex-col bg-muted/30">
+                    {/* Preview toolbar */}
+                    <div className="flex items-center gap-1 px-2 py-1 border-b text-xs">
+                      <button
+                        className="px-2 py-0.5 rounded hover:bg-accent"
+                        onClick={() => setZoom((z) => Math.min(z + 25, 400))}
+                      >
+                        +
+                      </button>
+                      <span className="min-w-[3rem] text-center">{zoom}%</span>
+                      <button
+                        className="px-2 py-0.5 rounded hover:bg-accent"
+                        onClick={() => setZoom((z) => Math.max(z - 25, 25))}
+                      >
+                        -
+                      </button>
+                      <button
+                        className="px-2 py-0.5 rounded hover:bg-accent ml-1"
+                        onClick={() => setZoom(100)}
+                      >
+                        Reset
+                      </button>
+                      {rendering && (
+                        <span className="ml-auto text-muted-foreground">Rendering...</span>
+                      )}
                     </div>
-                  ) : (
-                    <div className="relative flex items-start justify-center min-h-full">
-                      {/* Error overlay */}
-                      {renderError && lastGoodSvg && (
-                        <div className="absolute top-2 left-2 right-2 z-10 bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2 text-xs">
-                          <span className="text-destructive font-medium">
-                            {renderError.message}
-                          </span>
-                          {renderError.line && (
-                            <span className="text-muted-foreground ml-2">
-                              Line {renderError.line}
-                            </span>
+
+                    {/* Preview content */}
+                    <div className="flex-1 overflow-auto p-4">
+                      {renderError && !lastGoodSvg ? (
+                        <div className="flex items-center justify-center h-full">
+                          <div className="text-center text-muted-foreground">
+                            <p className="text-sm font-medium text-destructive mb-1">
+                              {renderError.message}
+                            </p>
+                            {renderError.line && (
+                              <p className="text-xs">Error on line {renderError.line}</p>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="relative flex items-start justify-center min-h-full">
+                          {renderError && lastGoodSvg && (
+                            <div className="absolute top-2 left-2 right-2 z-10 bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2 text-xs">
+                              <span className="text-destructive font-medium">
+                                {renderError.message}
+                              </span>
+                              {renderError.line && (
+                                <span className="text-muted-foreground ml-2">
+                                  Line {renderError.line}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          <div
+                            className={`transition-opacity ${renderError ? "opacity-40" : ""}`}
+                            style={{ transform: `scale(${zoom / 100})`, transformOrigin: "top center" }}
+                            dangerouslySetInnerHTML={{
+                              __html: svgContent || lastGoodSvg || "",
+                            }}
+                          />
+                          {!svgContent && !lastGoodSvg && !rendering && (
+                            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                              Write some PlantUML to see a preview
+                            </div>
                           )}
                         </div>
                       )}
-                      <div
-                        className={`transition-opacity ${renderError ? "opacity-40" : ""}`}
-                        style={{ transform: `scale(${zoom / 100})`, transformOrigin: "top center" }}
-                        dangerouslySetInnerHTML={{
-                          __html: svgContent || lastGoodSvg || "",
-                        }}
-                      />
-                      {!svgContent && !lastGoodSvg && !rendering && (
-                        <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                          Write some PlantUML to see a preview
-                        </div>
-                      )}
                     </div>
-                  )}
-                </div>
-              </div>
-            </Panel>
+                  </div>
+                </Panel>
+              )}
+            </PanelGroup>
           )}
-        </PanelGroup>
+        </div>
+
+        {/* Version History Panel */}
+        {showHistory && (
+          <VersionHistoryPanel
+            documentId={documentId}
+            permission={doc.permission}
+            onClose={() => {
+              setShowHistory(false);
+              setPreviewVersion(null);
+              setDiffData(null);
+            }}
+            onPreview={(vContent, vNumber) => {
+              setPreviewVersion({ content: vContent, number: vNumber });
+              setDiffData(null);
+            }}
+            onRestore={(restoredContent) => {
+              setContent(restoredContent);
+              contentRef.current = restoredContent;
+              setPreviewVersion(null);
+              setDiffData(null);
+              triggerRender(restoredContent);
+            }}
+            onDiff={(diff) => {
+              setDiffData(diff);
+              setPreviewVersion(null);
+            }}
+          />
+        )}
       </div>
 
       {/* Status bar */}
