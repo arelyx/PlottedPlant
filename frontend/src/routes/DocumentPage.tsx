@@ -4,8 +4,8 @@ import Editor, { type OnMount } from "@monaco-editor/react";
 import type * as Monaco from "monaco-editor";
 import {
   Panel,
-  PanelGroup,
-  PanelResizeHandle,
+  Group as PanelGroup,
+  Separator as PanelResizeHandle,
 } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
