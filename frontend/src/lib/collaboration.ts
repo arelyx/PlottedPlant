@@ -64,6 +64,7 @@ export function createCollaborationSession(
     onStatus?: (status: ConnectionStatus) => void;
     onCollaborators?: (collaborators: CollaboratorInfo[]) => void;
     onSynced?: () => void;
+    onAuthenticationFailed?: (reason: string) => void;
   } = {},
 ): CollaborationSession {
   const ydoc = new Y.Doc();
@@ -84,6 +85,9 @@ export function createCollaborationSession(
     },
     onSynced() {
       callbacks.onSynced?.();
+    },
+    onAuthenticationFailed({ reason }) {
+      callbacks.onAuthenticationFailed?.(reason);
     },
     onAwarenessUpdate({ states }) {
       const collaborators: CollaboratorInfo[] = [];

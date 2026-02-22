@@ -213,6 +213,19 @@ export function DocumentPage() {
     []
   );
 
+  // Trigger initial render from REST content so preview shows immediately
+  // (before WebSocket syncs). The Y.Text onSynced callback will re-trigger
+  // the render with WebSocket content once connected.
+  const initialRenderDone = useRef(false);
+  useEffect(() => {
+    if (doc?.content && !initialRenderDone.current) {
+      initialRenderDone.current = true;
+      contentRef.current = doc.content;
+      setLineCount(doc.content.split("\n").length);
+      triggerRender(doc.content);
+    }
+  }, [doc, triggerRender]);
+
   // --- Collaboration session ---
   useEffect(() => {
     if (!doc || !authUser || isNaN(documentId)) return;
@@ -247,6 +260,10 @@ export function DocumentPage() {
           if (editorRef.current && !session.binding) {
             bindMonacoEditor(session, editorRef.current);
           }
+        },
+        onAuthenticationFailed(reason) {
+          console.warn("Collaboration auth failed:", reason);
+          setConnectionStatus("disconnected");
         },
       },
     );
@@ -567,6 +584,7 @@ export function DocumentPage() {
                 <Panel defaultSize={50} minSize={20}>
                   <Editor
                     height="100%"
+                    defaultValue={doc.content}
                     language="plantuml"
                     theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
                     onMount={handleEditorMount}

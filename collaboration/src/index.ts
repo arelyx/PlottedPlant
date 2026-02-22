@@ -1,6 +1,6 @@
 import { Server } from "@hocuspocus/server";
 import express from "express";
-import { onAuthenticate } from "./hooks/onAuthenticate.js";
+import { onAuthenticate, getActiveSocketIds, removeUserConnection } from "./hooks/onAuthenticate.js";
 import { onLoadDocument } from "./hooks/onLoadDocument.js";
 import { onStoreDocument } from "./hooks/onStoreDocument.js";
 import { onDisconnect } from "./hooks/onDisconnect.js";
@@ -18,6 +18,7 @@ const INTERNAL_SECRET = process.env.INTERNAL_SECRET || "";
 // Hocuspocus WebSocket server with all lifecycle hooks
 const hocuspocus = Server.configure({
   port: WEBSOCKET_PORT,
+  timeout: 30_000, // Detect dead WebSocket connections via ping/pong
   debounce: DEBOUNCE_MS,
   maxDebounce: MAX_DEBOUNCE_MS,
 
@@ -50,6 +51,33 @@ hocuspocus.listen();
 logger.info(
   `Hocuspocus WebSocket server listening on port ${WEBSOCKET_PORT} (debounce: ${DEBOUNCE_MS}ms, max: ${MAX_DEBOUNCE_MS}ms)`,
 );
+
+// Periodically clean up stale connection tracking entries.
+// If a WebSocket dies without a proper close frame (browser crash, network
+// failure), onDisconnect never fires and the socket ID stays in the tracking
+// map. This sweep collects all socket IDs that Hocuspocus still considers
+// active and removes any tracked entries that are no longer present.
+const CLEANUP_INTERVAL_MS = 60_000; // 1 minute
+setInterval(() => {
+  const liveSocketIds = new Set<string>();
+  for (const doc of hocuspocus.documents.values()) {
+    for (const conn of doc.getConnections()) {
+      if (conn.socketId) liveSocketIds.add(conn.socketId);
+    }
+  }
+
+  const tracked = getActiveSocketIds();
+  let cleaned = 0;
+  for (const socketId of tracked) {
+    if (!liveSocketIds.has(socketId)) {
+      removeUserConnection(socketId);
+      cleaned++;
+    }
+  }
+  if (cleaned > 0) {
+    logger.info(`Cleaned up ${cleaned} stale connection tracking entries`);
+  }
+}, CLEANUP_INTERVAL_MS);
 
 // Internal HTTP command server (health + commands)
 const app = express();
