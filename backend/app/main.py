@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from app.config import settings
-from app.routers import health
+from app.routers import auth, health
 
 app = FastAPI(
     title="PlantUML IDE API",
@@ -24,6 +24,7 @@ app.add_middleware(
 
 # Routers
 app.include_router(health.router)
+app.include_router(auth.router)
 
 
 @app.get("/", include_in_schema=False)
