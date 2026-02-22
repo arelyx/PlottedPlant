@@ -697,7 +697,7 @@ export function DocumentPage() {
           </span>
           <span className="text-muted-foreground">|</span>
           {collaborators.length > 0 && (
-            <span>{collaborators.length + 1} users</span>
+            <span>{collaborators.length} {collaborators.length === 1 ? "user" : "users"}</span>
           )}
           <span className={`inline-block w-2 h-2 rounded-full ${statusColor}`} />
           <span>{statusLabel}</span>
