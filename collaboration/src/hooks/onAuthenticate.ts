@@ -2,6 +2,31 @@ import type { onAuthenticatePayload } from "@hocuspocus/server";
 import { internalRequest } from "../utils/http.js";
 import { logger } from "../utils/logger.js";
 
+const MAX_CONNECTIONS_PER_USER = parseInt(
+  process.env.MAX_WS_CONNECTIONS_PER_USER || "5",
+  10,
+);
+
+// Track active connection counts per user
+const userConnectionCounts = new Map<number, number>();
+
+export function getUserConnectionCount(userId: number): number {
+  return userConnectionCounts.get(userId) || 0;
+}
+
+export function incrementUserConnections(userId: number): void {
+  userConnectionCounts.set(userId, getUserConnectionCount(userId) + 1);
+}
+
+export function decrementUserConnections(userId: number): void {
+  const count = getUserConnectionCount(userId) - 1;
+  if (count <= 0) {
+    userConnectionCounts.delete(userId);
+  } else {
+    userConnectionCounts.set(userId, count);
+  }
+}
+
 interface AuthResponse {
   valid: boolean;
   user_id?: number;
@@ -43,6 +68,19 @@ export async function onAuthenticate({
     throw new Error(result.reason || "Access denied");
   }
 
+  // Enforce per-user connection limit
+  const userId = result.user_id!;
+  const currentCount = getUserConnectionCount(userId);
+  if (currentCount >= MAX_CONNECTIONS_PER_USER) {
+    logger.warn(
+      `User ${userId} exceeded max WS connections (${currentCount}/${MAX_CONNECTIONS_PER_USER})`,
+    );
+    throw new Error("Too many concurrent connections");
+  }
+
+  // Track the new connection
+  incrementUserConnections(userId);
+
   // Attach user metadata to connection context
   connection.readOnly = result.permission === "viewer";
   (connection as any).context = {
@@ -54,6 +92,6 @@ export async function onAuthenticate({
   };
 
   logger.info(
-    `Authenticated user ${result.user_id} (${result.display_name}) on document ${documentId} as ${result.permission}`,
+    `Authenticated user ${result.user_id} (${result.display_name}) on document ${documentId} as ${result.permission} (connections: ${currentCount + 1}/${MAX_CONNECTIONS_PER_USER})`,
   );
 }
