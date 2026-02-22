@@ -1,7 +1,8 @@
 import hashlib
 from typing import Literal
 
-from sqlalchemy import func, insert, select, update
+from sqlalchemy import func, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.document import Document
