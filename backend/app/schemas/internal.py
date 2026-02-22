@@ -12,3 +12,19 @@ class AuthValidateResponse(BaseModel):
     display_name: str | None = None
     permission: str | None = None
     reason: str | None = None
+
+
+class SyncRequest(BaseModel):
+    content: str
+    edited_by_user_id: int
+
+
+class SyncResponse(BaseModel):
+    version_created: bool
+    version_number: int | None = None
+
+
+class SessionEndResponse(BaseModel):
+    version_created: bool
+    version_number: int | None = None
+    source: str | None = None
