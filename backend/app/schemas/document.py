@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # --- Shared sub-models ---
@@ -25,9 +25,9 @@ class FolderBrief(BaseModel):
 # --- Request schemas ---
 
 class DocumentCreateRequest(BaseModel):
-    title: str | None = None
+    title: str | None = Field(default=None, max_length=255)
     folder_id: int | None = None
-    content: str | None = None
+    content: str | None = Field(default=None, max_length=500_000)
     template_id: int | None = None
 
 
@@ -35,7 +35,7 @@ _UNSET = object()
 
 
 class DocumentUpdateRequest(BaseModel):
-    title: str | None = None
+    title: str | None = Field(default=None, max_length=255)
     folder_id: int | None | Any = _UNSET  # _UNSET means not provided; None means move to root
 
     @model_validator(mode="before")
@@ -52,11 +52,11 @@ class DocumentUpdateRequest(BaseModel):
 
 
 class DocumentContentUpdateRequest(BaseModel):
-    content: str
+    content: str = Field(max_length=500_000)
 
 
 class DocumentDuplicateRequest(BaseModel):
-    title: str | None = None
+    title: str | None = Field(default=None, max_length=255)
     folder_id: int | None = None
 
 

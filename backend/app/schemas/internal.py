@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class AuthValidateRequest(BaseModel):
@@ -15,7 +15,7 @@ class AuthValidateResponse(BaseModel):
 
 
 class SyncRequest(BaseModel):
-    content: str
+    content: str = Field(max_length=500_000)
     edited_by_user_id: int
 
 

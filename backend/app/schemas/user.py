@@ -8,6 +8,13 @@ class UserUpdateRequest(BaseModel):
     display_name: str | None = None
     avatar_url: str | None = None
 
+    @field_validator("avatar_url")
+    @classmethod
+    def validate_avatar_url(cls, v: str | None) -> str | None:
+        if v is not None and len(v) > 2048:
+            raise ValueError("Avatar URL must be at most 2048 characters")
+        return v
+
     @field_validator("display_name")
     @classmethod
     def validate_display_name(cls, v: str | None) -> str | None:
