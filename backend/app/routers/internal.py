@@ -81,7 +81,7 @@ async def get_document_content(
 
 
 async def _sync_content(
-    db: AsyncSession, document_id: int, content: str, user_id: int, source: str
+    db: AsyncSession, document_id: int, content: str, user_id: int | None, source: str
 ) -> tuple[bool, int | None]:
     """Shared logic for sync and session-end: hash-compare, skip or create version."""
     result = await db.execute(
@@ -95,8 +95,11 @@ async def _sync_content(
     if doc.current_content_hash == content_hash:
         return False, None
 
+    # Fall back to document owner if no editor is known
+    effective_user_id = user_id if user_id else doc.owner_id
+
     version_number = await create_version(
-        db, document_id, content, user_id, source=source
+        db, document_id, content, effective_user_id, source=source
     )
     await db.commit()
     return True, version_number
