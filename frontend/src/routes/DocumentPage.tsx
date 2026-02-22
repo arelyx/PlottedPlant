@@ -19,16 +19,23 @@ import {
 import {
   getDocument,
   updateDocument,
-  updateDocumentContent,
   type DocumentDetail,
 } from "@/lib/documents";
 import { api } from "@/lib/api";
 import { DiffEditor } from "@monaco-editor/react";
 import { usePreferencesStore } from "@/stores/preferences";
+import { useAuthStore } from "@/stores/auth";
 import { EditorSettingsPopover } from "@/components/EditorSettingsPopover";
 import { VersionHistoryPanel } from "@/components/VersionHistoryPanel";
 import { ShareDialog } from "@/components/ShareDialog";
 import type { VersionDiff } from "@/lib/versions";
+import {
+  createCollaborationSession,
+  bindMonacoEditor,
+  type CollaborationSession,
+  type ConnectionStatus,
+  type CollaboratorInfo,
+} from "@/lib/collaboration";
 
 // --- Types ---
 
@@ -84,18 +91,20 @@ export function DocumentPage() {
   const navigate = useNavigate();
   const documentId = Number(id);
   const { preferences, resolvedTheme } = usePreferencesStore();
+  const authUser = useAuthStore((s) => s.user);
 
   // Document state
   const [doc, setDoc] = useState<DocumentDetail | null>(null);
-  const [content, setContent] = useState("");
   const [title, setTitle] = useState("");
   const [editingTitle, setEditingTitle] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Save state
-  const [saving, setSaving] = useState(false);
-  const [lastSaved, setLastSaved] = useState<string | null>(null);
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Collaboration state
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("connecting");
+  const [collaborators, setCollaborators] = useState<CollaboratorInfo[]>([]);
+  const collabSessionRef = useRef<CollaborationSession | null>(null);
+
+  // Content ref — tracks Y.Text value for rendering and export
   const contentRef = useRef("");
 
   // Render state
@@ -119,16 +128,15 @@ export function DocumentPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("split");
   const [zoom, setZoom] = useState(100);
   const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
+  const [lineCount, setLineCount] = useState(1);
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
 
-  // --- Load document ---
+  // --- Load document metadata ---
   const loadDocument = useCallback(async () => {
     try {
       const data = await getDocument(documentId);
       setDoc(data);
-      setContent(data.content);
-      contentRef.current = data.content;
       setTitle(data.title);
       setLoadError(null);
     } catch {
@@ -198,56 +206,54 @@ export function DocumentPage() {
     []
   );
 
-  // Initial render
+  // --- Collaboration session ---
   useEffect(() => {
-    if (content) triggerRender(content);
-    return () => {
-      if (renderTimeoutRef.current) clearTimeout(renderTimeoutRef.current);
+    if (!doc || !authUser || isNaN(documentId)) return;
+
+    const session = createCollaborationSession(
+      documentId,
+      { id: authUser.id, name: authUser.display_name },
+      doc.permission,
+      {
+        onStatus(status) {
+          setConnectionStatus(status);
+        },
+        onCollaborators(collabs) {
+          setCollaborators(collabs);
+        },
+        onSynced() {
+          // Once synced, trigger initial render from Y.Text content
+          const text = session.ytext.toString();
+          if (text) {
+            contentRef.current = text;
+            setLineCount(text.split("\n").length);
+            triggerRender(text);
+          }
+        },
+      },
+    );
+
+    collabSessionRef.current = session;
+
+    // Observe Y.Text changes for render pipeline
+    const ytextObserver = () => {
+      const text = session.ytext.toString();
+      contentRef.current = text;
+      setLineCount(text.split("\n").length);
+      triggerRender(text);
     };
-  }, []); // Only on first content load
+    session.ytext.observe(ytextObserver);
 
-  // --- Save ---
-  const saveContent = useCallback(
-    async (newContent: string) => {
-      if (!doc || doc.permission === "viewer") return;
-      setSaving(true);
-      try {
-        const result = await updateDocumentContent(documentId, newContent);
-        if (result.created_version) {
-          setDoc((prev) =>
-            prev ? { ...prev, version_number: result.version_number } : prev
-          );
-        }
-        setLastSaved(new Date().toLocaleTimeString());
-      } catch (err) {
-        console.error("Failed to save:", err);
-      } finally {
-        setSaving(false);
-      }
-    },
-    [doc, documentId]
-  );
+    return () => {
+      session.ytext.unobserve(ytextObserver);
+      session.destroy();
+      collabSessionRef.current = null;
+    };
+  }, [doc, authUser, documentId, triggerRender]);
 
-  const handleContentChange = useCallback(
-    (newContent: string | undefined) => {
-      if (newContent === undefined) return;
-      setContent(newContent);
-      contentRef.current = newContent;
-
-      // Trigger render
-      triggerRender(newContent);
-
-      // Debounced save (2 seconds)
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(() => saveContent(newContent), 2000);
-    },
-    [triggerRender, saveContent]
-  );
-
-  // Cleanup
+  // Cleanup render timeout on unmount
   useEffect(() => {
     return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       if (renderTimeoutRef.current) clearTimeout(renderTimeoutRef.current);
     };
   }, []);
@@ -293,20 +299,17 @@ export function DocumentPage() {
       setCursorPosition({ line: e.position.lineNumber, column: e.position.column });
     });
 
-    // Ctrl+S to save immediately
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveContent(contentRef.current);
-    });
-
     // Ctrl+Shift+H to toggle history panel
     editor.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyH,
       () => setShowHistory((prev) => !prev)
     );
 
-    // Trigger initial render
-    triggerRender(contentRef.current);
+    // Bind y-monaco to the editor
+    const session = collabSessionRef.current;
+    if (session) {
+      bindMonacoEditor(session, editor);
+    }
   };
 
   // --- Title ---
@@ -356,7 +359,20 @@ export function DocumentPage() {
   }
 
   const isReadOnly = doc.permission === "viewer";
-  const lineCount = content.split("\n").length;
+
+  // Connection status indicator
+  const statusLabel =
+    connectionStatus === "connected"
+      ? "Connected"
+      : connectionStatus === "connecting"
+        ? "Connecting..."
+        : "Disconnected";
+  const statusColor =
+    connectionStatus === "connected"
+      ? "bg-green-500"
+      : connectionStatus === "connecting"
+        ? "bg-yellow-500"
+        : "bg-red-500";
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
@@ -389,9 +405,27 @@ export function DocumentPage() {
               Read Only
             </span>
           )}
-          <span className="text-xs text-muted-foreground ml-2">
-            {saving ? "Saving..." : lastSaved ? `Saved ${lastSaved}` : ""}
-          </span>
+
+          {/* Collaborator indicators */}
+          {collaborators.length > 0 && (
+            <div className="flex items-center gap-0.5 ml-2">
+              {collaborators.slice(0, 5).map((c) => (
+                <div
+                  key={c.clientId}
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+                  style={{ backgroundColor: c.user.color }}
+                  title={`${c.user.name}${c.permission === "viewer" ? " (viewing)" : ""}`}
+                >
+                  {c.user.name.charAt(0).toUpperCase()}
+                </div>
+              ))}
+              {collaborators.length > 5 && (
+                <span className="text-xs text-muted-foreground ml-1">
+                  +{collaborators.length - 5}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-1">
@@ -443,7 +477,7 @@ export function DocumentPage() {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => navigator.clipboard.writeText(content)}
+                onClick={() => navigator.clipboard.writeText(contentRef.current)}
               >
                 Copy Source
               </DropdownMenuItem>
@@ -569,8 +603,6 @@ export function DocumentPage() {
                         height="100%"
                         language="plantuml"
                         theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
-                        value={content}
-                        onChange={handleContentChange}
                         onMount={handleEditorMount}
                         options={{
                           readOnly: isReadOnly,
@@ -686,8 +718,8 @@ export function DocumentPage() {
               setDiffData(null);
             }}
             onRestore={(restoredContent) => {
-              setContent(restoredContent);
-              contentRef.current = restoredContent;
+              // After REST restore, Hocuspocus receives force-content
+              // The Y.Text will be updated server-side, which triggers observer
               setPreviewVersion(null);
               setDiffData(null);
               triggerRender(restoredContent);
@@ -718,7 +750,13 @@ export function DocumentPage() {
         {renderTime !== null && (
           <span>{rendering ? "Rendering..." : `Rendered in ${renderTime}ms`}</span>
         )}
-        <span className="ml-auto">v{doc.version_number}</span>
+        <div className="flex items-center gap-1.5 ml-auto">
+          {collaborators.length > 0 && (
+            <span>{collaborators.length + 1} users</span>
+          )}
+          <span className={`inline-block w-2 h-2 rounded-full ${statusColor}`} />
+          <span>{statusLabel}</span>
+        </div>
       </div>
     </div>
   );
