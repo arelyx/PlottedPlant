@@ -22,12 +22,10 @@ import {
   type DocumentDetail,
 } from "@/lib/documents";
 import { api } from "@/lib/api";
-import { DiffEditor } from "@monaco-editor/react";
 import { usePreferencesStore } from "@/stores/preferences";
 import { useAuthStore } from "@/stores/auth";
 import { VersionHistoryPanel } from "@/components/VersionHistoryPanel";
 import { ShareDialog } from "@/components/ShareDialog";
-import type { VersionDiff } from "@/lib/versions";
 import {
   createCollaborationSession,
   bindMonacoEditor,
@@ -118,8 +116,6 @@ export function DocumentPage() {
 
   // History state
   const [showHistory, setShowHistory] = useState(false);
-  const [previewVersion, setPreviewVersion] = useState<{ content: string; number: number } | null>(null);
-  const [diffData, setDiffData] = useState<VersionDiff | null>(null);
 
   // Share state
   const [showShare, setShowShare] = useState(false);
@@ -543,13 +539,7 @@ export function DocumentPage() {
             <Button
               variant={showHistory ? "secondary" : "ghost"}
               size="sm"
-              onClick={() => {
-                setShowHistory((prev) => !prev);
-                if (showHistory) {
-                  setPreviewVersion(null);
-                  setDiffData(null);
-                }
-              }}
+              onClick={() => setShowHistory((prev) => !prev)}
             >
               History
             </Button>
@@ -557,110 +547,39 @@ export function DocumentPage() {
         </div>
       </div>
 
-      {/* Preview version banner */}
-      {previewVersion && (
-        <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted shrink-0">
-          <span className="text-xs">
-            Viewing version {previewVersion.number} (read-only)
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-xs h-6"
-            onClick={() => setPreviewVersion(null)}
-          >
-            Exit Preview
-          </Button>
-        </div>
-      )}
-
-      {/* Diff banner */}
-      {diffData && (
-        <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted shrink-0">
-          <span className="text-xs">
-            Comparing v{diffData.base_version} with v{diffData.compare_version}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-xs h-6"
-            onClick={() => setDiffData(null)}
-          >
-            Close Diff
-          </Button>
-        </div>
-      )}
-
       {/* Main content area: editor/preview + optional history panel */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Editor + Preview (or diff view) */}
+        {/* Editor + Preview */}
         <div className="flex-1 overflow-hidden">
-          {diffData ? (
-            /* Diff view */
-            <DiffEditor
-              height="100%"
-              language="plantuml"
-              theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
-              original={diffData.base_content}
-              modified={diffData.compare_content}
-              options={{
-                readOnly: true,
-                renderSideBySide: true,
-                fontSize: preferences.editor_font_size,
-                minimap: { enabled: false },
-                scrollBeyondLastLine: false,
-                automaticLayout: true,
-              }}
-            />
-          ) : (
-            <PanelGroup direction="horizontal">
-              {viewMode !== "preview" && (
-                <>
-                  <Panel defaultSize={50} minSize={20}>
-                    {previewVersion ? (
-                      <Editor
-                        height="100%"
-                        language="plantuml"
-                        theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
-                        value={previewVersion.content}
-                        options={{
-                          readOnly: true,
-                          minimap: { enabled: preferences.editor_minimap },
-                          fontSize: preferences.editor_font_size,
-                          lineNumbers: "on",
-                          wordWrap: preferences.editor_word_wrap ? "on" : "off",
-                          scrollBeyondLastLine: false,
-                          automaticLayout: true,
-                          padding: { top: 8 },
-                        }}
-                      />
-                    ) : (
-                      <Editor
-                        height="100%"
-                        language="plantuml"
-                        theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
-                        onMount={handleEditorMount}
-                        options={{
-                          readOnly: isReadOnly,
-                          minimap: { enabled: preferences.editor_minimap },
-                          fontSize: preferences.editor_font_size,
-                          lineNumbers: "on",
-                          wordWrap: preferences.editor_word_wrap ? "on" : "off",
-                          scrollBeyondLastLine: false,
-                          automaticLayout: true,
-                          tabSize: 2,
-                          renderLineHighlight: "line",
-                          bracketPairColorization: { enabled: true },
-                          padding: { top: 8 },
-                        }}
-                      />
-                    )}
-                  </Panel>
-                  {viewMode === "split" && (
-                    <PanelResizeHandle className="w-1.5 bg-border hover:bg-primary/20 transition-colors" />
-                  )}
-                </>
-              )}
+          <PanelGroup direction="horizontal">
+            {viewMode !== "preview" && (
+              <>
+                <Panel defaultSize={50} minSize={20}>
+                  <Editor
+                    height="100%"
+                    language="plantuml"
+                    theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
+                    onMount={handleEditorMount}
+                    options={{
+                      readOnly: isReadOnly,
+                      minimap: { enabled: preferences.editor_minimap },
+                      fontSize: preferences.editor_font_size,
+                      lineNumbers: "on",
+                      wordWrap: preferences.editor_word_wrap ? "on" : "off",
+                      scrollBeyondLastLine: false,
+                      automaticLayout: true,
+                      tabSize: 2,
+                      renderLineHighlight: "line",
+                      bracketPairColorization: { enabled: true },
+                      padding: { top: 8 },
+                    }}
+                  />
+                </Panel>
+                {viewMode === "split" && (
+                  <PanelResizeHandle className="w-1.5 bg-border hover:bg-primary/20 transition-colors" />
+                )}
+              </>
+            )}
               {viewMode !== "editor" && (
                 <Panel defaultSize={50} minSize={20}>
                   <div className="h-full flex flex-col bg-muted/30">
@@ -735,8 +654,7 @@ export function DocumentPage() {
                   </div>
                 </Panel>
               )}
-            </PanelGroup>
-          )}
+          </PanelGroup>
         </div>
 
         {/* Version History Panel */}
@@ -745,25 +663,11 @@ export function DocumentPage() {
             documentId={documentId}
             permission={doc.permission}
             refreshKey={historyRefreshKey}
-            onClose={() => {
-              setShowHistory(false);
-              setPreviewVersion(null);
-              setDiffData(null);
-            }}
-            onPreview={(vContent, vNumber) => {
-              setPreviewVersion({ content: vContent, number: vNumber });
-              setDiffData(null);
-            }}
+            onClose={() => setShowHistory(false)}
             onRestore={(restoredContent) => {
               // After REST restore, Hocuspocus receives force-content
               // The Y.Text will be updated server-side, which triggers observer
-              setPreviewVersion(null);
-              setDiffData(null);
               triggerRender(restoredContent);
-            }}
-            onDiff={(diff) => {
-              setDiffData(diff);
-              setPreviewVersion(null);
             }}
           />
         )}
