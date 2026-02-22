@@ -32,6 +32,7 @@ import {
   type DocumentItem,
 } from "@/lib/documents";
 import { TemplatePickerDialog } from "@/components/TemplatePickerDialog";
+import { ShareDialog } from "@/components/ShareDialog";
 
 function relativeTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -66,6 +67,11 @@ export function DashboardPage() {
   const [showMoveDoc, setShowMoveDoc] = useState(false);
   const [moveDocId, setMoveDocId] = useState<number | null>(null);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [shareTarget, setShareTarget] = useState<{
+    type: "document" | "folder";
+    id: number;
+    name: string;
+  } | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -218,6 +224,9 @@ export function DashboardPage() {
                     setMoveDocId(id);
                     setShowMoveDoc(true);
                   }}
+                  onShare={(id, title) => {
+                    setShareTarget({ type: "document", id, name: title });
+                  }}
                 />
               )}
             </div>
@@ -247,6 +256,13 @@ export function DashboardPage() {
                             name: folder.name,
                           });
                           setShowDeleteConfirm(true);
+                        }}
+                        onShare={() => {
+                          setShareTarget({
+                            type: "folder",
+                            id: folder.id,
+                            name: folder.name,
+                          });
                         }}
                       />
                     ))}
@@ -284,6 +300,9 @@ export function DashboardPage() {
                     onMove={(id) => {
                       setMoveDocId(id);
                       setShowMoveDoc(true);
+                    }}
+                    onShare={(id, title) => {
+                      setShareTarget({ type: "document", id, name: title });
                     }}
                   />
                 )}
@@ -376,6 +395,19 @@ export function DashboardPage() {
         }}
       />
 
+      {/* Share Dialog */}
+      {shareTarget && (
+        <ShareDialog
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setShareTarget(null);
+          }}
+          resourceType={shareTarget.type}
+          resourceId={shareTarget.id}
+          resourceName={shareTarget.name}
+        />
+      )}
+
       {/* Move to Folder Dialog */}
       <Dialog open={showMoveDoc} onOpenChange={setShowMoveDoc}>
         <DialogContent>
@@ -415,11 +447,13 @@ function FolderCard({
   onClick,
   onRename,
   onDelete,
+  onShare,
 }: {
   folder: FolderItem;
   onClick: () => void;
   onRename: () => void;
   onDelete: () => void;
+  onShare: () => void;
 }) {
   return (
     <div
@@ -457,10 +491,15 @@ function FolderCard({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
           <DropdownMenuItem onClick={onRename}>Rename</DropdownMenuItem>
+          {folder.permission === "owner" && (
+            <DropdownMenuItem onClick={onShare}>Share</DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem className="text-destructive" onClick={onDelete}>
-            Delete
-          </DropdownMenuItem>
+          {folder.permission === "owner" && (
+            <DropdownMenuItem className="text-destructive" onClick={onDelete}>
+              Delete
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -473,12 +512,14 @@ function DocumentList({
   onDelete,
   onDuplicate,
   onMove,
+  onShare,
 }: {
   documents: DocumentItem[];
   onOpen: (id: number) => void;
   onDelete: (id: number, title: string) => void;
   onDuplicate: (id: number) => void;
   onMove: (id: number) => void;
+  onShare: (id: number, title: string) => void;
 }) {
   return (
     <div className="space-y-1">
@@ -512,9 +553,11 @@ function DocumentList({
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
-                {doc.last_edited_by
-                  ? `Edited by ${doc.last_edited_by.display_name} · `
-                  : ""}
+                {doc.shared_by
+                  ? `Shared by ${doc.shared_by.display_name} · `
+                  : doc.last_edited_by
+                    ? `Edited by ${doc.last_edited_by.display_name} · `
+                    : ""}
                 {relativeTime(doc.updated_at)}
               </p>
             </div>
@@ -534,6 +577,9 @@ function DocumentList({
               </DropdownMenuItem>
               {doc.permission === "owner" && (
                 <>
+                  <DropdownMenuItem onClick={() => onShare(doc.id, doc.title)}>
+                    Share
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => onMove(doc.id)}>
                     Move to folder
                   </DropdownMenuItem>

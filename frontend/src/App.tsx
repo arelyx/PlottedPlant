@@ -9,6 +9,7 @@ import { ResetPasswordPage } from "@/routes/ResetPasswordPage";
 import { DashboardPage } from "@/routes/DashboardPage";
 import { DocumentPage } from "@/routes/DocumentPage";
 import { TemplateBrowserPage } from "@/routes/TemplateBrowserPage";
+import { SharedDocumentPage } from "@/routes/SharedDocumentPage";
 
 function App() {
   return (
@@ -34,6 +35,9 @@ function App() {
           <Route path="/templates" element={<TemplateBrowserPage />} />
           <Route path="/documents/:id" element={<DocumentPage />} />
         </Route>
+
+        {/* Public share access */}
+        <Route path="/share/:token" element={<SharedDocumentPage />} />
 
         {/* Root redirect */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

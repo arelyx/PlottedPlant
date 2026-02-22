@@ -27,6 +27,7 @@ import { DiffEditor } from "@monaco-editor/react";
 import { usePreferencesStore } from "@/stores/preferences";
 import { EditorSettingsPopover } from "@/components/EditorSettingsPopover";
 import { VersionHistoryPanel } from "@/components/VersionHistoryPanel";
+import { ShareDialog } from "@/components/ShareDialog";
 import type { VersionDiff } from "@/lib/versions";
 
 // --- Types ---
@@ -110,6 +111,9 @@ export function DocumentPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [previewVersion, setPreviewVersion] = useState<{ content: string; number: number } | null>(null);
   const [diffData, setDiffData] = useState<VersionDiff | null>(null);
+
+  // Share state
+  const [showShare, setShowShare] = useState(false);
 
   // Editor state
   const [viewMode, setViewMode] = useState<ViewMode>("split");
@@ -453,6 +457,16 @@ export function DocumentPage() {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {doc.permission === "owner" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowShare(true)}
+            >
+              Share
+            </Button>
+          )}
+
           {!isReadOnly && (
             <Button
               variant={showHistory ? "secondary" : "ghost"}
@@ -685,6 +699,15 @@ export function DocumentPage() {
           />
         )}
       </div>
+
+      {/* Share Dialog */}
+      <ShareDialog
+        open={showShare}
+        onOpenChange={setShowShare}
+        resourceType="document"
+        resourceId={documentId}
+        resourceName={doc.title}
+      />
 
       {/* Status bar */}
       <div className="flex items-center gap-4 px-3 py-1 border-t text-xs text-muted-foreground bg-background shrink-0">

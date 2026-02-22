@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import BigInteger, Text, func, literal, literal_column, or_, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user_id, get_db
 from app.models.document import Document
+from app.models.document_share import DocumentShare
 from app.models.folder import Folder
+from app.models.folder_share import FolderShare
+from app.models.user import User
 from app.schemas.document import (
     ContentUpdateResponse,
     DocumentContentUpdateRequest,
@@ -21,6 +24,7 @@ from app.services.document import (
     create_version,
     get_document_with_permission,
     get_user_brief,
+    is_document_shared,
     resolve_folder_permission,
 )
 
@@ -43,19 +47,6 @@ async def _validate_folder_ownership(db: AsyncSession, folder_id: int, user_id: 
     return folder
 
 
-def _build_list_item(doc: Document, permission: str, folder_info: dict | None, shared_by: dict | None, last_edited: dict | None) -> DocumentListItem:
-    return DocumentListItem(
-        id=doc.id,
-        title=doc.title,
-        folder=folder_info,
-        permission=permission,
-        is_shared=False,  # TODO (Step 7)
-        last_edited_by=last_edited,
-        shared_by=shared_by,
-        created_at=doc.created_at,
-        updated_at=doc.updated_at,
-    )
-
 
 @router.get("", response_model=DocumentListResponse)
 async def list_documents(
@@ -69,8 +60,54 @@ async def list_documents(
     db: AsyncSession = Depends(get_db),
 ):
     """List all documents visible to the authenticated user."""
-    # Build base query — user's own documents (Step 7 adds shared docs)
-    query = select(Document).where(Document.owner_id == user_id)
+    # Gather all document IDs visible to the user with their permission + shared_by
+    # 1. Own documents
+    own_docs = (
+        select(
+            Document.id.label("doc_id"),
+            literal("owner").label("permission"),
+            literal(None).cast(BigInteger).label("shared_by_id"),
+        )
+        .where(Document.owner_id == user_id)
+    )
+
+    # 2. Directly shared documents
+    direct_shared = (
+        select(
+            DocumentShare.document_id.label("doc_id"),
+            DocumentShare.permission.label("permission"),
+            Document.owner_id.label("shared_by_id"),
+        )
+        .join(Document, Document.id == DocumentShare.document_id)
+        .where(DocumentShare.shared_with_id == user_id)
+    )
+
+    # 3. Documents in shared folders (exclude already directly shared or owned)
+    folder_shared = (
+        select(
+            Document.id.label("doc_id"),
+            FolderShare.permission.label("permission"),
+            Document.owner_id.label("shared_by_id"),
+        )
+        .join(FolderShare, FolderShare.folder_id == Document.folder_id)
+        .where(
+            FolderShare.shared_with_id == user_id,
+            Document.owner_id != user_id,
+            ~Document.id.in_(
+                select(DocumentShare.document_id).where(
+                    DocumentShare.shared_with_id == user_id
+                )
+            ),
+        )
+    )
+
+    visible = union_all(own_docs, direct_shared, folder_shared).subquery("visible")
+
+    # Build main query joining visible docs
+    query = (
+        select(Document, visible.c.permission, visible.c.shared_by_id)
+        .join(visible, Document.id == visible.c.doc_id)
+    )
 
     # Filter by folder
     if folder_id == "root":
@@ -99,10 +136,10 @@ async def list_documents(
     query = query.offset(offset).limit(limit)
 
     result = await db.execute(query)
-    documents = result.scalars().all()
+    rows = result.all()
 
     # Batch-load folder info
-    folder_ids = {d.folder_id for d in documents if d.folder_id is not None}
+    folder_ids = {doc.folder_id for doc, _, _ in rows if doc.folder_id is not None}
     folder_map = {}
     if folder_ids:
         folders_result = await db.execute(
@@ -111,26 +148,45 @@ async def list_documents(
         for fid, fname in folders_result.all():
             folder_map[fid] = {"id": fid, "name": fname}
 
-    # Batch-load last_edited_by user info
-    editor_ids = {d.last_edited_by for d in documents if d.last_edited_by is not None}
-    editor_map = {}
-    if editor_ids:
-        from app.models.user import User
-        editors_result = await db.execute(
-            select(User.id, User.display_name).where(User.id.in_(editor_ids))
+    # Batch-load user info (editors + shared_by)
+    user_ids = set()
+    for doc, perm, shared_by_id in rows:
+        if doc.last_edited_by:
+            user_ids.add(doc.last_edited_by)
+        if shared_by_id:
+            user_ids.add(shared_by_id)
+    user_map = {}
+    if user_ids:
+        users_result = await db.execute(
+            select(User.id, User.display_name).where(User.id.in_(user_ids))
         )
-        for uid, dname in editors_result.all():
-            editor_map[uid] = {"id": uid, "display_name": dname}
+        for uid, dname in users_result.all():
+            user_map[uid] = {"id": uid, "display_name": dname}
 
-    items = [
-        _build_list_item(
-            doc, "owner",
-            folder_map.get(doc.folder_id) if doc.folder_id else None,
-            None,
-            editor_map.get(doc.last_edited_by) if doc.last_edited_by else None,
+    # Check which documents are shared
+    doc_ids = [doc.id for doc, _, _ in rows]
+    shared_doc_ids = set()
+    if doc_ids:
+        ds_result = await db.execute(
+            select(DocumentShare.document_id).where(
+                DocumentShare.document_id.in_(doc_ids)
+            ).distinct()
         )
-        for doc in documents
-    ]
+        shared_doc_ids.update(r[0] for r in ds_result.all())
+
+    items = []
+    for doc, perm, shared_by_id in rows:
+        items.append(DocumentListItem(
+            id=doc.id,
+            title=doc.title,
+            folder=folder_map.get(doc.folder_id) if doc.folder_id else None,
+            permission=perm,
+            is_shared=doc.id in shared_doc_ids,
+            last_edited_by=user_map.get(doc.last_edited_by) if doc.last_edited_by else None,
+            shared_by=user_map.get(shared_by_id) if shared_by_id else None,
+            created_at=doc.created_at,
+            updated_at=doc.updated_at,
+        ))
 
     return DocumentListResponse(items=items, total=total, limit=limit, offset=offset)
 
@@ -220,12 +276,14 @@ async def get_document(
         if brief:
             last_edited = {"id": brief["id"], "display_name": brief["display_name"]}
 
+    shared = await is_document_shared(db, doc.id)
+
     return DocumentDetailResponse(
         id=doc.id,
         title=doc.title,
         folder=folder_info,
         permission=permission,
-        is_shared=False,  # TODO (Step 7)
+        is_shared=shared,
         content=doc.current_content,
         version_number=doc.version_counter,
         owner=owner,

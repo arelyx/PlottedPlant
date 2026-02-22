@@ -40,15 +40,24 @@ async def update_me(
 
 @router.get("/search")
 async def search_users(
-    q: str = Query(..., min_length=1, max_length=50),
-    limit: int = Query(10, ge=1, le=50),
+    q: str = Query(..., min_length=2, max_length=50),
+    limit: int = Query(10, ge=1, le=20),
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> list[UserSearchResponse]:
-    """Search users by username prefix for the sharing dialog."""
+    """Search users by username or email prefix for the sharing dialog."""
+    from sqlalchemy import or_
+
+    pattern = f"{q.lower()}%"
     result = await db.execute(
         select(User)
-        .where(func.lower(User.username).like(f"{q.lower()}%"))
+        .where(
+            User.id != user.id,
+            or_(
+                func.lower(User.username).like(pattern),
+                func.lower(User.email).like(pattern),
+            ),
+        )
         .order_by(User.username)
         .limit(limit)
     )
