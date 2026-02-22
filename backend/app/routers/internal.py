@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_db, verify_internal_secret
 from app.models.document import Document
 from app.models.user import User
+from fastapi.responses import JSONResponse
+
 from app.schemas.internal import (
     AuthValidateRequest,
     AuthValidateResponse,
@@ -61,6 +63,21 @@ async def validate_auth(
         display_name=user.display_name,
         permission=permission,
     )
+
+
+@router.get("/documents/{document_id}/content")
+async def get_document_content(
+    document_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """Return document plain text for Hocuspocus onLoadDocument."""
+    result = await db.execute(
+        select(Document.current_content).where(Document.id == document_id)
+    )
+    row = result.one_or_none()
+    if row is None:
+        return JSONResponse(status_code=404, content={"error": "Document not found"})
+    return JSONResponse(content={"content": row[0] or ""})
 
 
 async def _sync_content(
