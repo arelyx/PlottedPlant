@@ -23,6 +23,8 @@ import {
   type DocumentDetail,
 } from "@/lib/documents";
 import { api } from "@/lib/api";
+import { usePreferencesStore } from "@/stores/preferences";
+import { EditorSettingsPopover } from "@/components/EditorSettingsPopover";
 
 // --- Types ---
 
@@ -77,6 +79,7 @@ export function DocumentPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const documentId = Number(id);
+  const { preferences, resolvedTheme } = usePreferencesStore();
 
   // Document state
   const [doc, setDoc] = useState<DocumentDetail | null>(null);
@@ -435,6 +438,8 @@ export function DocumentPage() {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <EditorSettingsPopover />
         </div>
       </div>
 
@@ -447,16 +452,16 @@ export function DocumentPage() {
                 <Editor
                   height="100%"
                   language="plantuml"
-                  theme="vs-dark"
+                  theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
                   value={content}
                   onChange={handleContentChange}
                   onMount={handleEditorMount}
                   options={{
                     readOnly: isReadOnly,
-                    minimap: { enabled: false },
-                    fontSize: 14,
+                    minimap: { enabled: preferences.editor_minimap },
+                    fontSize: preferences.editor_font_size,
                     lineNumbers: "on",
-                    wordWrap: "on",
+                    wordWrap: preferences.editor_word_wrap ? "on" : "off",
                     scrollBeyondLastLine: false,
                     automaticLayout: true,
                     tabSize: 2,
