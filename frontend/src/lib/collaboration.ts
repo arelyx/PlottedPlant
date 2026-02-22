@@ -70,9 +70,9 @@ export function createCollaborationSession(
   const ytext = ydoc.getText("monaco");
 
   // Determine WebSocket URL
-  // In dev, the Vite proxy or Nginx routes /collaboration/ to Hocuspocus
+  // Nginx routes /collaboration to Hocuspocus upstream
   const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${wsProtocol}//${window.location.host}/collaboration/`;
+  const wsUrl = `${wsProtocol}//${window.location.host}/collaboration`;
 
   const provider = new HocuspocusProvider({
     url: wsUrl,
