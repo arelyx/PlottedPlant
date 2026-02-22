@@ -8,6 +8,7 @@ from app.dependencies import get_current_user_id, get_db
 from app.models.document_content import DocumentContent
 from app.models.document_version import DocumentVersion
 from app.models.user import User
+from app.services.collaboration import notify_force_content
 from app.schemas.version import (
     CreateCheckpointRequest,
     CreateCheckpointResponse,
@@ -288,6 +289,13 @@ async def restore_version(
     )
 
     await db.commit()
+
+    # Notify Hocuspocus to push restored content to active collaborators
+    user_result = await db.execute(select(User.display_name).where(User.id == user_id))
+    display_name = user_result.scalar_one_or_none() or "Unknown"
+    await notify_force_content(
+        document_id, target_content, display_name, post_restore_version
+    )
 
     return RestoreResponse(
         restored_to_version=version_number,
