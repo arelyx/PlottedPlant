@@ -17,18 +17,17 @@ import {
   createCheckpoint,
   restoreVersion,
   type VersionListItem,
-  type VersionDetail,
   type VersionDiff,
 } from "@/lib/versions";
+import { VersionPreviewDialog } from "@/components/VersionPreviewDialog";
+import { VersionDiffDialog } from "@/components/VersionDiffDialog";
 
 interface VersionHistoryPanelProps {
   documentId: number;
   permission: string;
   refreshKey?: number;
   onClose: () => void;
-  onPreview: (content: string, versionNumber: number) => void;
   onRestore: (content: string) => void;
-  onDiff: (diff: VersionDiff | null) => void;
 }
 
 function relativeTime(dateStr: string): string {
@@ -58,9 +57,7 @@ export function VersionHistoryPanel({
   permission,
   refreshKey,
   onClose,
-  onPreview,
   onRestore,
-  onDiff,
 }: VersionHistoryPanelProps) {
   const [versions, setVersions] = useState<VersionListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,10 +67,21 @@ export function VersionHistoryPanel({
   // Compare mode
   const [compareSelection, setCompareSelection] = useState<number[]>([]);
 
-  // Dialogs
+  // Preview dialog state
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewContent, setPreviewContent] = useState("");
+  const [previewVersionNumber, setPreviewVersionNumber] = useState(0);
+
+  // Diff dialog state
+  const [diffOpen, setDiffOpen] = useState(false);
+  const [diffData, setDiffData] = useState<VersionDiff | null>(null);
+
+  // Checkpoint dialog
   const [showCheckpoint, setShowCheckpoint] = useState(false);
   const [checkpointLabel, setCheckpointLabel] = useState("");
   const [creatingCheckpoint, setCreatingCheckpoint] = useState(false);
+
+  // Restore dialog
   const [showRestore, setShowRestore] = useState(false);
   const [restoreTarget, setRestoreTarget] = useState<number | null>(null);
   const [restoring, setRestoring] = useState(false);
@@ -110,10 +118,19 @@ export function VersionHistoryPanel({
   const handlePreview = async (versionNumber: number) => {
     try {
       const detail = await getVersion(documentId, versionNumber);
-      onPreview(detail.content, versionNumber);
+      setPreviewContent(detail.content);
+      setPreviewVersionNumber(versionNumber);
+      setPreviewOpen(true);
     } catch {
       console.error("Failed to load version");
     }
+  };
+
+  const handlePreviewRestore = () => {
+    // Close preview, open restore confirmation
+    setPreviewOpen(false);
+    setRestoreTarget(previewVersionNumber);
+    setShowRestore(true);
   };
 
   const handleCompareToggle = (versionNumber: number) => {
@@ -133,7 +150,8 @@ export function VersionHistoryPanel({
     const [a, b] = compareSelection.sort((x, y) => x - y);
     try {
       const diff = await getVersionDiff(documentId, a, b);
-      onDiff(diff);
+      setDiffData(diff);
+      setDiffOpen(true);
     } catch {
       console.error("Failed to load diff");
     }
@@ -146,7 +164,7 @@ export function VersionHistoryPanel({
       await createCheckpoint(documentId, checkpointLabel.trim());
       setShowCheckpoint(false);
       setCheckpointLabel("");
-      loadVersions(); // Refresh list
+      loadVersions();
     } catch {
       console.error("Failed to create checkpoint");
     } finally {
@@ -162,7 +180,7 @@ export function VersionHistoryPanel({
       onRestore(result.content);
       setShowRestore(false);
       setRestoreTarget(null);
-      loadVersions(); // Refresh list
+      loadVersions();
     } catch {
       console.error("Failed to restore version");
     } finally {
@@ -216,10 +234,7 @@ export function VersionHistoryPanel({
               variant="ghost"
               size="sm"
               className="text-xs h-6"
-              onClick={() => {
-                setCompareSelection([]);
-                onDiff(null);
-              }}
+              onClick={() => setCompareSelection([])}
             >
               Clear
             </Button>
@@ -305,6 +320,24 @@ export function VersionHistoryPanel({
           </div>
         )}
       </div>
+
+      {/* Preview Dialog */}
+      <VersionPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        versionNumber={previewVersionNumber}
+        content={previewContent}
+        onRestore={isOwner ? handlePreviewRestore : undefined}
+      />
+
+      {/* Diff Dialog */}
+      {diffData && (
+        <VersionDiffDialog
+          open={diffOpen}
+          onOpenChange={setDiffOpen}
+          diff={diffData}
+        />
+      )}
 
       {/* Checkpoint Dialog */}
       <Dialog open={showCheckpoint} onOpenChange={setShowCheckpoint}>
