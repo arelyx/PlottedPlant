@@ -14,6 +14,7 @@ from app.routers import (
     render,
     templates,
     users,
+    versions,
 )
 
 app = FastAPI(
@@ -41,6 +42,7 @@ app.include_router(folders.router)
 app.include_router(documents.router)
 app.include_router(render.router)
 app.include_router(export.router)
+app.include_router(versions.router)
 app.include_router(templates.router)
 app.include_router(preferences.router)
 app.include_router(internal.router)
