@@ -50,6 +50,12 @@ class User(Base):
     preferences: Mapped["UserPreferences | None"] = relationship(
         back_populates="user", cascade="all, delete-orphan", uselist=False
     )
+    folders: Mapped[list["Folder"]] = relationship(
+        back_populates="owner", cascade="all, delete-orphan"
+    )
+    owned_documents: Mapped[list["Document"]] = relationship(
+        foreign_keys="[Document.owner_id]", back_populates="owner", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         UniqueConstraint("email", name="uq_users_email"),
