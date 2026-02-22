@@ -4,6 +4,7 @@ import { EditorView, basicSetup } from "codemirror";
 import { EditorState } from "@codemirror/state";
 import { usePreferencesStore } from "@/stores/preferences";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { plantumlLanguage } from "@/lib/plantuml-lang";
 import type { VersionDiff } from "@/lib/versions";
 import {
   Dialog,
@@ -65,6 +66,7 @@ export function VersionDiffDialog({
         doc: d.base_content,
         extensions: [
           basicSetup,
+          plantumlLanguage,
           EditorView.editable.of(false),
           EditorState.readOnly.of(true),
           EditorView.theme({
@@ -78,6 +80,7 @@ export function VersionDiffDialog({
         doc: d.compare_content,
         extensions: [
           basicSetup,
+          plantumlLanguage,
           EditorView.editable.of(false),
           EditorState.readOnly.of(true),
           EditorView.theme({
