@@ -1,0 +1,254 @@
+# docker-compose.yml
+# Production configuration
+
+services:
+
+  # ─────────────────────────────────────────────
+  # NGINX — Reverse Proxy & TLS Termination
+  # ─────────────────────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: plantuml-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d/:/etc/nginx/conf.d/:ro
+      - ./frontend/dist/:/usr/share/nginx/html/:ro
+      - certbot_certs:/etc/letsencrypt:ro
+      - certbot_webroot:/var/www/certbot:ro
+    networks:
+      - frontend_net
+    depends_on:
+      backend:
+        condition: service_healthy
+      collaboration:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ─────────────────────────────────────────────
+  # BACKEND — FastAPI REST API
+  # ─────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: plantuml-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - APP_ENV=production
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379/0
+      - PLANTUML_SERVER_URL=http://plantuml:8080
+      - COLLABORATION_SERVER_URL=http://collaboration:1235
+      - INTERNAL_SECRET=${INTERNAL_SECRET}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - JWT_REFRESH_TOKEN_EXPIRE_DAYS=30
+      - OAUTH_GOOGLE_CLIENT_ID=${OAUTH_GOOGLE_CLIENT_ID}
+      - OAUTH_GOOGLE_CLIENT_SECRET=${OAUTH_GOOGLE_CLIENT_SECRET}
+      - OAUTH_GITHUB_CLIENT_ID=${OAUTH_GITHUB_CLIENT_ID}
+      - OAUTH_GITHUB_CLIENT_SECRET=${OAUTH_GITHUB_CLIENT_SECRET}
+      - OAUTH_REDIRECT_BASE_URL=${PUBLIC_URL}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
+      - SMTP_USE_TLS=true
+      - PUBLIC_URL=${PUBLIC_URL}
+      - CORS_ORIGINS=${PUBLIC_URL}
+      - LOG_LEVEL=info
+    volumes:
+      - backend_tmp:/tmp/plantuml-cache
+    networks:
+      - frontend_net
+      - backend_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      plantuml:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ─────────────────────────────────────────────
+  # COLLABORATION — Hocuspocus WebSocket Server
+  # ─────────────────────────────────────────────
+  collaboration:
+    build:
+      context: ./collaboration
+      dockerfile: Dockerfile
+    container_name: plantuml-collaboration
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - WEBSOCKET_PORT=1234
+      - COMMAND_PORT=1235
+      - BACKEND_INTERNAL_URL=http://backend:8000/api/v1/internal
+      - INTERNAL_SECRET=${INTERNAL_SECRET}
+      - DEBOUNCE_MS=10000
+      - MAX_DEBOUNCE_MS=30000
+      - LOG_LEVEL=info
+    networks:
+      - frontend_net
+      - backend_net
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:1235/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ─────────────────────────────────────────────
+  # PLANTUML — Diagram Rendering Engine
+  # ─────────────────────────────────────────────
+  plantuml:
+    image: plantuml/plantuml-server:jetty-v1.2024.8
+    container_name: plantuml-renderer
+    restart: unless-stopped
+    environment:
+      - PLANTUML_LIMIT_SIZE=16384
+      - ALLOW_PLANTUML_INCLUDE=false
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/svg/SoWkIImgAStDuGe8zVLHqBLJ20eD"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 512M
+
+  # ─────────────────────────────────────────────
+  # POSTGRESQL — Primary Data Store
+  # ─────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: plantuml-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./postgres/init/:/docker-entrypoint-initdb.d/:ro
+      - postgres_backups:/backups
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+    shm_size: '256m'
+
+  # ─────────────────────────────────────────────
+  # REDIS — Cache & Rate Limiting
+  # ─────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: plantuml-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --appendonly no
+      --save ""
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+
+  # ─────────────────────────────────────────────
+  # CERTBOT — TLS Certificate Management
+  # ─────────────────────────────────────────────
+  certbot:
+    image: certbot/certbot:latest
+    container_name: plantuml-certbot
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done'"
+    depends_on:
+      - nginx
+
+# ─────────────────────────────────────────────
+# VOLUMES
+# ─────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+    name: plantuml_postgres_data
+  postgres_backups:
+    driver: local
+    name: plantuml_postgres_backups
+  redis_data:
+    driver: local
+    name: plantuml_redis_data
+  backend_tmp:
+    driver: local
+    name: plantuml_backend_tmp
+  certbot_certs:
+    driver: local
+    name: plantuml_certbot_certs
+  certbot_webroot:
+    driver: local
+    name: plantuml_certbot_webroot
+
+# ─────────────────────────────────────────────
+# NETWORKS
+# ─────────────────────────────────────────────
+networks:
+  frontend_net:
+    name: plantuml_frontend
+    driver: bridge
+  backend_net:
+    name: plantuml_backend
+    driver: bridge
+    internal: true
