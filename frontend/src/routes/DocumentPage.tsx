@@ -27,6 +27,11 @@ import { useAuthStore } from "@/stores/auth";
 import { VersionHistoryPanel } from "@/components/VersionHistoryPanel";
 import { ShareDialog } from "@/components/ShareDialog";
 import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
+import {
   createCollaborationSession,
   bindMonacoEditor,
   type CollaborationSession,
@@ -444,14 +449,19 @@ export function DocumentPage() {
           {collaborators.length > 0 && (
             <div className="flex items-center gap-0.5 ml-2">
               {collaborators.slice(0, 5).map((c) => (
-                <div
-                  key={c.clientId}
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
-                  style={{ backgroundColor: c.user.color }}
-                  title={`${c.user.name}${c.permission === "viewer" ? " (viewing)" : ""}`}
-                >
-                  {c.user.name.charAt(0).toUpperCase()}
-                </div>
+                <Tooltip key={c.clientId}>
+                  <TooltipTrigger asChild>
+                    <div
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white cursor-default"
+                      style={{ backgroundColor: c.user.color }}
+                    >
+                      {c.user.name.charAt(0).toUpperCase()}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={4}>
+                    {c.user.name}{c.permission === "viewer" ? " (viewing)" : ""}
+                  </TooltipContent>
+                </Tooltip>
               ))}
               {collaborators.length > 5 && (
                 <span className="text-xs text-muted-foreground ml-1">
