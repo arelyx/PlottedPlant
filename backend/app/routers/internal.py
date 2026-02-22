@@ -12,7 +12,11 @@ from app.schemas.internal import (
     SyncRequest,
     SyncResponse,
 )
-from app.services.document import compute_content_hash, create_version
+from app.services.document import (
+    compute_content_hash,
+    create_version,
+    resolve_document_permission,
+)
 from app.utils.security import decode_access_token
 
 router = APIRouter(
@@ -46,13 +50,16 @@ async def validate_auth(
     if user is None:
         return AuthValidateResponse(valid=False, reason="User not found")
 
-    # Document permission checking will be implemented in Step 7 (Sharing & Permissions).
-    # For now, return owner permission for any valid user as a placeholder.
+    # Check document permission
+    permission = await resolve_document_permission(db, body.document_id, user_id)
+    if permission is None:
+        return AuthValidateResponse(valid=False, reason="No access to document")
+
     return AuthValidateResponse(
         valid=True,
         user_id=user.id,
         display_name=user.display_name,
-        permission="owner",
+        permission=permission,
     )
 
 

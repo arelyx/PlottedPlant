@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_current_user_id, get_db
 from app.models.document import Document
 from app.models.folder import Folder
+from app.models.folder_share import FolderShare
+from app.models.user import User
 from app.schemas.folder import (
     FolderCreateRequest,
     FolderDetailResponse,
@@ -12,19 +14,25 @@ from app.schemas.folder import (
     FolderResponse,
     FolderUpdateRequest,
 )
-from app.services.document import resolve_folder_permission
+from app.services.document import is_folder_shared, resolve_folder_permission
 
 router = APIRouter(prefix="/api/v1/folders", tags=["folders"])
 
 
-def _folder_to_response(folder: Folder, permission: str, document_count: int) -> FolderResponse:
+def _folder_to_response(
+    folder: Folder,
+    permission: str,
+    document_count: int,
+    shared: bool = False,
+    shared_by: dict | None = None,
+) -> FolderResponse:
     return FolderResponse(
         id=folder.id,
         name=folder.name,
         permission=permission,
         document_count=document_count,
-        shared_by=None,  # TODO (Step 7): populate for shared folders
-        is_shared=False,  # TODO (Step 7): check if shared
+        shared_by=shared_by,
+        is_shared=shared,
         created_at=folder.created_at,
         updated_at=folder.updated_at,
     )
@@ -38,31 +46,67 @@ async def list_folders(
     db: AsyncSession = Depends(get_db),
 ):
     """List all folders visible to the authenticated user."""
-    # User's own folders (Step 7 will add shared folders via UNION)
     sort_col = Folder.name if sort == "name" else Folder.updated_at
     order_func = sort_col.asc() if order == "asc" else sort_col.desc()
 
+    # Own folders
     result = await db.execute(
         select(Folder).where(Folder.owner_id == user_id).order_by(order_func)
     )
-    folders = result.scalars().all()
+    own_folders = result.scalars().all()
+
+    # Shared folders
+    shared_result = await db.execute(
+        select(Folder, FolderShare.permission)
+        .join(FolderShare, FolderShare.folder_id == Folder.id)
+        .where(FolderShare.shared_with_id == user_id)
+        .order_by(order_func)
+    )
+    shared_rows = shared_result.all()
+
+    all_folder_ids = [f.id for f in own_folders] + [f.id for f, _ in shared_rows]
 
     # Count documents per folder in a single query
-    count_result = await db.execute(
-        select(Document.folder_id, func.count(Document.id))
-        .where(Document.folder_id.in_([f.id for f in folders]))
-        .group_by(Document.folder_id)
-    ) if folders else None
-
     doc_counts = {}
-    if count_result:
-        for folder_id, count in count_result.all():
-            doc_counts[folder_id] = count
+    if all_folder_ids:
+        count_result = await db.execute(
+            select(Document.folder_id, func.count(Document.id))
+            .where(Document.folder_id.in_(all_folder_ids))
+            .group_by(Document.folder_id)
+        )
+        for fid, count in count_result.all():
+            doc_counts[fid] = count
+
+    # Batch-load shared_by info for shared folders
+    shared_by_ids = {f.owner_id for f, _ in shared_rows}
+    user_map = {}
+    if shared_by_ids:
+        users_result = await db.execute(
+            select(User.id, User.display_name).where(User.id.in_(shared_by_ids))
+        )
+        for uid, dname in users_result.all():
+            user_map[uid] = {"id": uid, "display_name": dname}
+
+    # Check which own folders are shared
+    own_shared_ids = set()
+    if own_folders:
+        fs_result = await db.execute(
+            select(FolderShare.folder_id).where(
+                FolderShare.folder_id.in_([f.id for f in own_folders])
+            ).distinct()
+        )
+        own_shared_ids.update(r[0] for r in fs_result.all())
 
     items = [
-        _folder_to_response(f, "owner", doc_counts.get(f.id, 0))
-        for f in folders
+        _folder_to_response(f, "owner", doc_counts.get(f.id, 0), shared=f.id in own_shared_ids)
+        for f in own_folders
     ]
+    for folder, perm in shared_rows:
+        items.append(_folder_to_response(
+            folder, perm, doc_counts.get(folder.id, 0),
+            shared=True,
+            shared_by=user_map.get(folder.owner_id),
+        ))
 
     return FolderListResponse(items=items)
 
@@ -118,11 +162,13 @@ async def get_folder(
             "last_edited_by": last_edited,
         })
 
+    shared = await is_folder_shared(db, folder.id)
+
     return FolderDetailResponse(
         id=folder.id,
         name=folder.name,
         permission=permission,
-        is_shared=False,  # TODO (Step 7)
+        is_shared=shared,
         created_at=folder.created_at,
         updated_at=folder.updated_at,
         documents=doc_items,
