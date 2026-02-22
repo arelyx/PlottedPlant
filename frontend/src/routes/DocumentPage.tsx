@@ -341,11 +341,14 @@ export function DocumentPage() {
       () => setShowHistory((prev) => !prev)
     );
 
-    // Bind y-monaco to the editor only if the collaboration session has
-    // already synced. If not synced yet, the onSynced callback will create
-    // the binding once Y.Text has content from the server.
+    // Bind y-monaco to the editor. This also runs when re-mounting after
+    // exiting a version preview, so destroy any stale binding first.
     const session = collabSessionRef.current;
-    if (session && !session.binding && syncedRef.current) {
+    if (session && syncedRef.current) {
+      if (session.binding) {
+        session.binding.destroy();
+        session.binding = null;
+      }
       bindMonacoEditor(session, editor);
     }
   };
@@ -619,6 +622,7 @@ export function DocumentPage() {
                   <Panel defaultSize={50} minSize={20}>
                     {previewVersion ? (
                       <Editor
+                        key="preview"
                         height="100%"
                         language="plantuml"
                         theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
@@ -636,6 +640,7 @@ export function DocumentPage() {
                       />
                     ) : (
                       <Editor
+                        key="collaborative"
                         height="100%"
                         language="plantuml"
                         theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
