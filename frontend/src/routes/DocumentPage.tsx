@@ -235,6 +235,12 @@ export function DocumentPage() {
 
     collabSessionRef.current = session;
 
+    // If Monaco editor is already mounted (e.g. cached from a previous visit),
+    // bind immediately. Otherwise handleEditorMount will bind when it fires.
+    if (editorRef.current && !session.binding) {
+      bindMonacoEditor(session, editorRef.current);
+    }
+
     // Observe Y.Text changes for render pipeline
     const ytextObserver = () => {
       const text = session.ytext.toString();
@@ -305,9 +311,11 @@ export function DocumentPage() {
       () => setShowHistory((prev) => !prev)
     );
 
-    // Bind y-monaco to the editor
+    // Bind y-monaco to the editor (if session is already created).
+    // If session isn't ready yet, the collaboration useEffect will bind
+    // when it creates the session and sees editorRef.current is set.
     const session = collabSessionRef.current;
-    if (session) {
+    if (session && !session.binding) {
       bindMonacoEditor(session, editor);
     }
   };
