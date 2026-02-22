@@ -5,7 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.config import settings
-from app.middleware.rate_limit import RateLimitMiddleware
 from app.routers import (
     auth,
     documents,
@@ -49,9 +48,6 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
-
-# Rate limiting (uses Redis sliding window)
-app.add_middleware(RateLimitMiddleware)
 
 # Routers
 app.include_router(health.router)
