@@ -1,5 +1,6 @@
 import type { onDisconnectPayload } from "@hocuspocus/server";
 import type { DocumentMeta } from "./onLoadDocument.js";
+import { decrementUserConnections } from "./onAuthenticate.js";
 import { logger } from "../utils/logger.js";
 
 export async function onDisconnect({
@@ -15,6 +16,10 @@ export async function onDisconnect({
     display_name?: string;
     is_readonly?: boolean;
   } | undefined;
+
+  if (ctx?.user_id) {
+    decrementUserConnections(ctx.user_id);
+  }
 
   if (meta && ctx?.user_id) {
     meta.active_editors.delete(ctx.user_id);
