@@ -293,17 +293,6 @@ export function VersionHistoryPanel({
                     >
                       View
                     </button>
-                    {isOwner && (
-                      <button
-                        className="text-[10px] px-1.5 py-0.5 rounded hover:bg-accent text-muted-foreground"
-                        onClick={() => {
-                          setRestoreTarget(v.version_number);
-                          setShowRestore(true);
-                        }}
-                      >
-                        Restore
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>

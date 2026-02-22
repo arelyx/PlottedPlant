@@ -1,5 +1,6 @@
 import CodeMirror from "@uiw/react-codemirror";
 import { usePreferencesStore } from "@/stores/preferences";
+import { plantumlLanguage } from "@/lib/plantuml-lang";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,7 @@ export function VersionPreviewDialog({
             readOnly
             editable={false}
             theme={resolvedTheme === "dark" ? "dark" : "light"}
+            extensions={[plantumlLanguage]}
             basicSetup={{
               lineNumbers: true,
               foldGutter: false,
