@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # --- Shared sub-models ---
@@ -20,11 +20,11 @@ class DocumentInFolder(BaseModel):
 # --- Request schemas ---
 
 class FolderCreateRequest(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=255)
 
 
 class FolderUpdateRequest(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=255)
 
 
 # --- Response schemas ---

@@ -2,7 +2,7 @@ import logging
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.dependencies import get_current_user_id
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/v1/render", tags=["render"])
 
 
 class RenderRequest(BaseModel):
-    source: str
+    source: str = Field(max_length=500_000)
 
 
 class CheckResponse(BaseModel):
