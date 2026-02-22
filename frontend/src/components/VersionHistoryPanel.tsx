@@ -24,6 +24,7 @@ import {
 interface VersionHistoryPanelProps {
   documentId: number;
   permission: string;
+  refreshKey?: number;
   onClose: () => void;
   onPreview: (content: string, versionNumber: number) => void;
   onRestore: (content: string) => void;
@@ -55,6 +56,7 @@ const SOURCE_LABELS: Record<string, string> = {
 export function VersionHistoryPanel({
   documentId,
   permission,
+  refreshKey,
   onClose,
   onPreview,
   onRestore,
@@ -97,6 +99,13 @@ export function VersionHistoryPanel({
   useEffect(() => {
     loadVersions();
   }, [loadVersions]);
+
+  // Auto-refresh when a new save completes (refreshKey bumps)
+  useEffect(() => {
+    if (refreshKey && refreshKey > 0) {
+      loadVersions();
+    }
+  }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePreview = async (versionNumber: number) => {
     try {
