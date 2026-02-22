@@ -3,7 +3,7 @@ import { internalRequest } from "../utils/http.js";
 import { logger } from "../utils/logger.js";
 
 const MAX_CONNECTIONS_PER_USER = parseInt(
-  process.env.MAX_WS_CONNECTIONS_PER_USER || "5",
+  process.env.MAX_WS_CONNECTIONS_PER_USER || "20",
   10,
 );
 
@@ -37,6 +37,10 @@ export function removeUserConnection(socketId: string): void {
     }
     socketToUser.delete(socketId);
   }
+}
+
+export function getActiveSocketIds(): string[] {
+  return Array.from(socketToUser.keys());
 }
 
 interface AuthResponse {
