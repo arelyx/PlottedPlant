@@ -8,6 +8,7 @@ import { ForgotPasswordPage } from "@/routes/ForgotPasswordPage";
 import { ResetPasswordPage } from "@/routes/ResetPasswordPage";
 import { DashboardPage } from "@/routes/DashboardPage";
 import { DocumentPage } from "@/routes/DocumentPage";
+import { TemplateBrowserPage } from "@/routes/TemplateBrowserPage";
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
           }
         >
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/templates" element={<TemplateBrowserPage />} />
           <Route path="/documents/:id" element={<DocumentPage />} />
         </Route>
 

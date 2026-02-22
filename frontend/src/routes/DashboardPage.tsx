@@ -31,6 +31,7 @@ import {
   type FolderItem,
   type DocumentItem,
 } from "@/lib/documents";
+import { TemplatePickerDialog } from "@/components/TemplatePickerDialog";
 
 function relativeTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -64,6 +65,7 @@ export function DashboardPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ type: "folder" | "document"; id: number; name: string } | null>(null);
   const [showMoveDoc, setShowMoveDoc] = useState(false);
   const [moveDocId, setMoveDocId] = useState<number | null>(null);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -99,9 +101,14 @@ export function DashboardPage() {
     refresh();
   };
 
-  const handleCreateDocument = async () => {
+  const handleCreateDocument = async (
+    content?: string | null,
+    title?: string
+  ) => {
     const doc = await createDocument({
       folder_id: activeFolderId,
+      ...(content ? { content } : {}),
+      ...(title ? { title } : {}),
     });
     navigate(`/documents/${doc.id}`);
   };
@@ -178,7 +185,7 @@ export function DashboardPage() {
               New Folder
             </Button>
           )}
-          <Button onClick={handleCreateDocument}>New Document</Button>
+          <Button onClick={() => setShowTemplatePicker(true)}>New Document</Button>
         </div>
       </div>
 
@@ -193,7 +200,7 @@ export function DashboardPage() {
                 <EmptyState
                   message="This folder is empty."
                   action={
-                    <Button onClick={handleCreateDocument}>
+                    <Button onClick={() => setShowTemplatePicker(true)}>
                       Create Document
                     </Button>
                   }
@@ -256,7 +263,7 @@ export function DashboardPage() {
                   <EmptyState
                     message="No diagrams yet. Create your first PlantUML diagram to get started."
                     action={
-                      <Button onClick={handleCreateDocument}>
+                      <Button onClick={() => setShowTemplatePicker(true)}>
                         Create Your First Document
                       </Button>
                     }
@@ -358,6 +365,16 @@ export function DashboardPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Template Picker Dialog */}
+      <TemplatePickerDialog
+        open={showTemplatePicker}
+        onOpenChange={setShowTemplatePicker}
+        onSelect={(content, title) => {
+          setShowTemplatePicker(false);
+          handleCreateDocument(content, title);
+        }}
+      />
 
       {/* Move to Folder Dialog */}
       <Dialog open={showMoveDoc} onOpenChange={setShowMoveDoc}>
