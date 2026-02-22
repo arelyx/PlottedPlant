@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_current_user_id, get_db
 from app.models.document import Document
 from app.models.document_share import DocumentShare
+from app.services.collaboration import notify_close_room
 from app.models.folder import Folder
 from app.models.folder_share import FolderShare
 from app.models.user import User
@@ -342,6 +343,9 @@ async def delete_document(
             status_code=403,
             detail={"code": "OWNER_ONLY", "message": "Only the owner can delete this document."},
         )
+
+    # Notify Hocuspocus to close active connections before deleting
+    await notify_close_room(document_id)
 
     await db.delete(doc)
     await db.commit()
