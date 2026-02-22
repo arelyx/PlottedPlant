@@ -11,8 +11,8 @@ import { logger } from "./utils/logger.js";
 
 const WEBSOCKET_PORT = parseInt(process.env.WEBSOCKET_PORT || "1234", 10);
 const COMMAND_PORT = parseInt(process.env.COMMAND_PORT || "1235", 10);
-const DEBOUNCE_MS = parseInt(process.env.DEBOUNCE_MS || "10000", 10);
-const MAX_DEBOUNCE_MS = parseInt(process.env.MAX_DEBOUNCE_MS || "30000", 10);
+const DEBOUNCE_MS = parseInt(process.env.DEBOUNCE_MS || "2000", 10);
+const MAX_DEBOUNCE_MS = parseInt(process.env.MAX_DEBOUNCE_MS || "10000", 10);
 const INTERNAL_SECRET = process.env.INTERNAL_SECRET || "";
 
 // Hocuspocus WebSocket server with all lifecycle hooks

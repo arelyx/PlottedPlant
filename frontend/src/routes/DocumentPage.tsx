@@ -25,7 +25,6 @@ import { api } from "@/lib/api";
 import { DiffEditor } from "@monaco-editor/react";
 import { usePreferencesStore } from "@/stores/preferences";
 import { useAuthStore } from "@/stores/auth";
-import { EditorSettingsPopover } from "@/components/EditorSettingsPopover";
 import { VersionHistoryPanel } from "@/components/VersionHistoryPanel";
 import { ShareDialog } from "@/components/ShareDialog";
 import type { VersionDiff } from "@/lib/versions";
@@ -124,6 +123,12 @@ export function DocumentPage() {
 
   // Share state
   const [showShare, setShowShare] = useState(false);
+
+  // Save status — tracks whether local changes have been persisted
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const historyRefreshRef = useRef(0);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
   // Editor state
   const [viewMode, setViewMode] = useState<ViewMode>("split");
@@ -247,12 +252,29 @@ export function DocumentPage() {
 
     collabSessionRef.current = session;
 
-    // Observe Y.Text changes for render pipeline
+    // Observe Y.Text changes for render pipeline + save status
+    let isFirstSync = true;
     const ytextObserver = () => {
       const text = session.ytext.toString();
       contentRef.current = text;
       setLineCount(text.split("\n").length);
       triggerRender(text);
+
+      // Skip the initial sync (loading content from server)
+      if (isFirstSync) {
+        isFirstSync = false;
+        return;
+      }
+
+      // Mark as "saving" — server debounce is 2s, add margin for network
+      setSaveStatus("saving");
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        setSaveStatus("saved");
+        // Bump history refresh key so panel re-fetches
+        historyRefreshRef.current += 1;
+        setHistoryRefreshKey(historyRefreshRef.current);
+      }, 3500); // 2s server debounce + 1.5s margin
     };
     session.ytext.observe(ytextObserver);
 
@@ -261,6 +283,7 @@ export function DocumentPage() {
       session.destroy();
       collabSessionRef.current = null;
       syncedRef.current = false;
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, [doc, authUser, documentId, triggerRender]);
 
@@ -531,8 +554,6 @@ export function DocumentPage() {
               History
             </Button>
           )}
-
-          <EditorSettingsPopover />
         </div>
       </div>
 
@@ -723,6 +744,7 @@ export function DocumentPage() {
           <VersionHistoryPanel
             documentId={documentId}
             permission={doc.permission}
+            refreshKey={historyRefreshKey}
             onClose={() => {
               setShowHistory(false);
               setPreviewVersion(null);
@@ -766,6 +788,10 @@ export function DocumentPage() {
           <span>{rendering ? "Rendering..." : `Rendered in ${renderTime}ms`}</span>
         )}
         <div className="flex items-center gap-1.5 ml-auto">
+          <span className={saveStatus === "saving" ? "text-yellow-600 dark:text-yellow-400" : "text-green-600 dark:text-green-400"}>
+            {saveStatus === "saving" ? "Saving..." : "Saved"}
+          </span>
+          <span className="text-muted-foreground">|</span>
           {collaborators.length > 0 && (
             <span>{collaborators.length + 1} users</span>
           )}
