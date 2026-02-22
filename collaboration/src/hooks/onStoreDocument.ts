@@ -58,7 +58,7 @@ export async function onStoreDocument({
       method,
       body: {
         content: currentText,
-        edited_by_user_id: editedByUserId ?? 0,
+        edited_by_user_id: editedByUserId,
       },
     });
 

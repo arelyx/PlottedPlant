@@ -52,6 +52,7 @@ export async function onAuthenticate({
   documentName,
   connection,
   socketId,
+  context,
 }: onAuthenticatePayload): Promise<void> {
   const documentId = parseInt(documentName, 10);
   if (isNaN(documentId)) {
@@ -94,15 +95,14 @@ export async function onAuthenticate({
   // Track the new connection by socket ID
   addUserConnection(userId, socketId);
 
-  // Attach user metadata to connection context
+  // Attach user metadata to the shared context object so subsequent hooks
+  // (onChange, onDisconnect, etc.) can access user info.
   connection.readOnly = result.permission === "viewer";
-  (connection as any).context = {
-    user_id: result.user_id,
-    display_name: result.display_name,
-    permission: result.permission,
-    is_readonly: result.permission === "viewer",
-    authenticated_at: Date.now(),
-  };
+  context.user_id = result.user_id;
+  context.display_name = result.display_name;
+  context.permission = result.permission;
+  context.is_readonly = result.permission === "viewer";
+  context.authenticated_at = Date.now();
 
   logger.info(
     `Authenticated user ${result.user_id} (${result.display_name}) on document ${documentId} as ${result.permission} (connections: ${currentCount + 1}/${MAX_CONNECTIONS_PER_USER})`,

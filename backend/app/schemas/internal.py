@@ -16,7 +16,7 @@ class AuthValidateResponse(BaseModel):
 
 class SyncRequest(BaseModel):
     content: str = Field(max_length=500_000)
-    edited_by_user_id: int
+    edited_by_user_id: int | None = None
 
 
 class SyncResponse(BaseModel):
