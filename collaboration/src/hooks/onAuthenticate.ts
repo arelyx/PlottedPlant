@@ -7,23 +7,35 @@ const MAX_CONNECTIONS_PER_USER = parseInt(
   10,
 );
 
-// Track active connection counts per user
-const userConnectionCounts = new Map<number, number>();
+// Track active connections per user using unique socket IDs.
+// This avoids counter drift when disconnects are processed after reconnects
+// (common with React strict mode's mount → unmount → remount cycle).
+const userActiveSockets = new Map<number, Set<string>>();
+const socketToUser = new Map<string, number>();
 
 export function getUserConnectionCount(userId: number): number {
-  return userConnectionCounts.get(userId) || 0;
+  return userActiveSockets.get(userId)?.size ?? 0;
 }
 
-export function incrementUserConnections(userId: number): void {
-  userConnectionCounts.set(userId, getUserConnectionCount(userId) + 1);
+export function addUserConnection(userId: number, socketId: string): void {
+  if (!userActiveSockets.has(userId)) {
+    userActiveSockets.set(userId, new Set());
+  }
+  userActiveSockets.get(userId)!.add(socketId);
+  socketToUser.set(socketId, userId);
 }
 
-export function decrementUserConnections(userId: number): void {
-  const count = getUserConnectionCount(userId) - 1;
-  if (count <= 0) {
-    userConnectionCounts.delete(userId);
-  } else {
-    userConnectionCounts.set(userId, count);
+export function removeUserConnection(socketId: string): void {
+  const userId = socketToUser.get(socketId);
+  if (userId !== undefined) {
+    const sockets = userActiveSockets.get(userId);
+    if (sockets) {
+      sockets.delete(socketId);
+      if (sockets.size === 0) {
+        userActiveSockets.delete(userId);
+      }
+    }
+    socketToUser.delete(socketId);
   }
 }
 
@@ -39,6 +51,7 @@ export async function onAuthenticate({
   token,
   documentName,
   connection,
+  socketId,
 }: onAuthenticatePayload): Promise<void> {
   const documentId = parseInt(documentName, 10);
   if (isNaN(documentId)) {
@@ -78,8 +91,8 @@ export async function onAuthenticate({
     throw new Error("Too many concurrent connections");
   }
 
-  // Track the new connection
-  incrementUserConnections(userId);
+  // Track the new connection by socket ID
+  addUserConnection(userId, socketId);
 
   // Attach user metadata to connection context
   connection.readOnly = result.permission === "viewer";

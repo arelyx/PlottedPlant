@@ -1,6 +1,6 @@
 import type { onDisconnectPayload } from "@hocuspocus/server";
 import type { DocumentMeta } from "./onLoadDocument.js";
-import { decrementUserConnections } from "./onAuthenticate.js";
+import { removeUserConnection } from "./onAuthenticate.js";
 import { logger } from "../utils/logger.js";
 
 export async function onDisconnect({
@@ -8,6 +8,7 @@ export async function onDisconnect({
   documentName,
   clientsCount,
   context,
+  socketId,
 }: onDisconnectPayload): Promise<void> {
   const documentId = parseInt(documentName, 10);
   const meta = (document as any).meta as DocumentMeta | undefined;
@@ -17,9 +18,9 @@ export async function onDisconnect({
     is_readonly?: boolean;
   } | undefined;
 
-  if (ctx?.user_id) {
-    decrementUserConnections(ctx.user_id);
-  }
+  // Remove by socket ID — doesn't depend on context being set, and is immune
+  // to timing issues with rapid React strict-mode connect/disconnect cycles.
+  removeUserConnection(socketId);
 
   if (meta && ctx?.user_id) {
     meta.active_editors.delete(ctx.user_id);
