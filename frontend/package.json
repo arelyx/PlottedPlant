@@ -10,12 +10,16 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "@sinm/monaco-plantuml": "^0.5.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.575.0",
+    "monaco-editor": "^0.55.1",
     "radix-ui": "^1.4.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-resizable-panels": "^4.6.5",
     "react-router-dom": "^6.28.0",
     "tailwind-merge": "^3.5.0",
     "zustand": "^5.0.0"
