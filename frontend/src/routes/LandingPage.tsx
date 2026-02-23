@@ -59,13 +59,12 @@ actor User
 participant "Web App" as App
 participant "API Server" as API
 database "PostgreSQL" as DB
-
-User -> App : Open diagram
-App -> API : GET /documents/1
-API -> DB : SELECT content
-DB --> API : document data
-API --> App : JSON response
-App --> User : Render editor
+    User -> App : Open diagram
+    App -> API : GET /documents/1
+    API -> DB : SELECT content
+    DB --> API : document data
+    API --> App : JSON response
+    App --> User : Render editor
 @enduml`;
 
 export function LandingPage() {
