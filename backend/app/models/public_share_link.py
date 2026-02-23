@@ -15,9 +15,6 @@ class PublicShareLink(Base):
     document_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("documents.id", ondelete="CASCADE"), nullable=True
     )
-    folder_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("folders.id", ondelete="CASCADE"), nullable=True
-    )
     token: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()")
     )

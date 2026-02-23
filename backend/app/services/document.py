@@ -192,22 +192,11 @@ async def is_document_shared(db: AsyncSession, document_id: int) -> bool:
 
 
 async def is_folder_shared(db: AsyncSession, folder_id: int) -> bool:
-    """Check if a folder has any active shares."""
-    from app.models.public_share_link import PublicShareLink
-
+    """Check if a folder has any active user shares."""
     fs_result = await db.execute(
         select(func.count()).where(FolderShare.folder_id == folder_id)
     )
-    if fs_result.scalar_one() > 0:
-        return True
-
-    pl_result = await db.execute(
-        select(func.count()).where(
-            PublicShareLink.folder_id == folder_id,
-            PublicShareLink.is_active.is_(True),
-        )
-    )
-    return pl_result.scalar_one() > 0
+    return fs_result.scalar_one() > 0
 
 
 async def get_user_brief(db: AsyncSession, user_id: int) -> dict | None:

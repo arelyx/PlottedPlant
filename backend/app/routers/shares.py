@@ -292,17 +292,10 @@ async def list_folder_shares(
             created_at=s.created_at,
         ))
 
-    link_result = await db.execute(
-        select(PublicShareLink).where(
-            PublicShareLink.folder_id == folder_id,
-        )
-    )
-    link = link_result.scalar_one_or_none()
-
     return ShareListResponse(
         owner=owner_user,
         shares=share_responses,
-        public_link=_build_public_link_response(link) if link else None,
+        public_link=None,
     )
 
 
@@ -529,86 +522,6 @@ async def revoke_document_public_link(
 
 
 # ---------------------------------------------------------------------------
-# Folder Public Links
-# ---------------------------------------------------------------------------
-
-@router.post("/folders/{folder_id}/public-link", response_model=PublicLinkResponse)
-async def create_folder_public_link(
-    folder_id: int,
-    body: CreatePublicLinkRequest,
-    user_id: int = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-):
-    """Activate or create a public link for a folder. Owner only.
-
-    Each folder has at most one permanent public link. If one exists
-    (active or inactive), it is reactivated. Otherwise a new one is created.
-    """
-    permission = await resolve_folder_permission(db, folder_id, user_id)
-    if permission is None:
-        raise HTTPException(status_code=404, detail="Folder not found")
-    if permission != "owner":
-        raise HTTPException(
-            status_code=403,
-            detail={"code": "OWNER_ONLY", "message": "Only the owner can manage public links."},
-        )
-
-    # Check for existing link (active or inactive)
-    existing_result = await db.execute(
-        select(PublicShareLink).where(
-            PublicShareLink.folder_id == folder_id,
-        )
-    )
-    existing = existing_result.scalar_one_or_none()
-
-    if existing is not None:
-        existing.is_active = True
-        await db.commit()
-        await db.refresh(existing)
-        return _build_public_link_response(existing)
-
-    # First time — create new permanent link
-    link = PublicShareLink(
-        folder_id=folder_id,
-        permission="viewer",
-        created_by_id=user_id,
-    )
-    db.add(link)
-    await db.commit()
-    await db.refresh(link)
-    return _build_public_link_response(link)
-
-
-@router.delete("/folders/{folder_id}/public-link", status_code=204)
-async def revoke_folder_public_link(
-    folder_id: int,
-    user_id: int = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-):
-    """Deactivate the public link for a folder. Owner only."""
-    permission = await resolve_folder_permission(db, folder_id, user_id)
-    if permission is None:
-        raise HTTPException(status_code=404, detail="Folder not found")
-    if permission != "owner":
-        raise HTTPException(
-            status_code=403,
-            detail={"code": "OWNER_ONLY", "message": "Only the owner can manage public links."},
-        )
-
-    result = await db.execute(
-        select(PublicShareLink).where(
-            PublicShareLink.folder_id == folder_id,
-        )
-    )
-    link = result.scalar_one_or_none()
-    if link is None:
-        raise HTTPException(status_code=404, detail="No public link exists")
-
-    link.is_active = False
-    await db.commit()
-
-
-# ---------------------------------------------------------------------------
 # Public Share Access (No auth required)
 # ---------------------------------------------------------------------------
 
@@ -628,56 +541,27 @@ async def access_public_link(
     if link is None:
         raise HTTPException(status_code=404, detail="Link not found or has been revoked")
 
-    if link.document_id is not None:
-        doc_result = await db.execute(
-            select(Document).where(Document.id == link.document_id)
-        )
-        doc = doc_result.scalar_one_or_none()
-        if doc is None:
-            raise HTTPException(status_code=404, detail="Document not found")
+    doc_result = await db.execute(
+        select(Document).where(Document.id == link.document_id)
+    )
+    doc = doc_result.scalar_one_or_none()
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Document not found")
 
-        # Get owner info
-        owner_result = await db.execute(
-            select(User.display_name).where(User.id == doc.owner_id)
-        )
-        owner_name = owner_result.scalar_one_or_none() or "Unknown"
+    # Get owner info
+    owner_result = await db.execute(
+        select(User.display_name).where(User.id == doc.owner_id)
+    )
+    owner_name = owner_result.scalar_one_or_none() or "Unknown"
 
-        return {
-            "type": "document",
-            "permission": "viewer",
-            "document": {
-                "id": doc.id,
-                "title": doc.title,
-                "content": doc.current_content,
-                "owner": {"display_name": owner_name},
-                "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
-            },
-        }
-
-    if link.folder_id is not None:
-        folder_result = await db.execute(
-            select(Folder).where(Folder.id == link.folder_id)
-        )
-        folder = folder_result.scalar_one_or_none()
-        if folder is None:
-            raise HTTPException(status_code=404, detail="Folder not found")
-
-        docs_result = await db.execute(
-            select(Document.id, Document.title, Document.updated_at)
-            .where(Document.folder_id == link.folder_id)
-            .order_by(Document.updated_at.desc())
-        )
-        documents = [
-            {"id": row.id, "title": row.title, "updated_at": row.updated_at.isoformat() if row.updated_at else None}
-            for row in docs_result.all()
-        ]
-
-        return {
-            "type": "folder",
-            "permission": "viewer",
-            "folder": {
-                "id": folder.id,
-                "name": folder.name,
-                "documents": documents,
-            },
-        }
+    return {
+        "type": "document",
+        "permission": "viewer",
+        "document": {
+            "id": doc.id,
+            "title": doc.title,
+            "content": doc.current_content,
+            "owner": {"display_name": owner_name},
+            "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
+        },
+    }
