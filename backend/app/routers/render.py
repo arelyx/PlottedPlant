@@ -73,14 +73,28 @@ async def render_svg(
     )
 
 
+def _inject_dpi(source: str, dpi: int) -> str:
+    """Inject skinparam dpi directive after @startuml for high-res PNG export."""
+    directive = f"skinparam dpi {dpi}\n"
+    # Insert right after the @start line (e.g. @startuml, @startjson, etc.)
+    for i, line in enumerate(source.split("\n")):
+        if line.strip().lower().startswith("@start"):
+            lines = source.split("\n")
+            lines.insert(i + 1, f"skinparam dpi {dpi}")
+            return "\n".join(lines)
+    # No @start found — prepend the directive
+    return directive + source
+
+
 @router.post("/png")
 async def render_png(
     body: RenderRequest,
     _user_id: int | None = Depends(get_optional_user_id),
 ):
-    """Render PlantUML source as PNG."""
+    """Render PlantUML source as PNG at high resolution (300 DPI)."""
+    source = _inject_dpi(body.source, 300)
     try:
-        response = await _proxy_render(body.source, "png")
+        response = await _proxy_render(source, "png")
     except httpx.RequestError as e:
         logger.error("PlantUML server request failed: %s", e)
         raise HTTPException(status_code=502, detail="PlantUML server unavailable")
