@@ -10,7 +10,6 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useAuthStore } from "@/stores/auth";
 
@@ -78,7 +77,7 @@ export function LandingPage() {
   const ctaLabel = user ? "Go to Dashboard" : "Get Started";
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="dark min-h-screen bg-background text-foreground">
       {/* Navigation */}
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
@@ -106,9 +105,6 @@ export function LandingPage() {
 
       {/* Hero */}
       <section className="mx-auto max-w-6xl px-4 py-20 text-center md:py-28">
-        <Badge variant="secondary" className="mb-4">
-          Open-source collaborative IDE
-        </Badge>
         <h1 className="mx-auto max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
           Create UML Diagrams{" "}
           <span className="text-muted-foreground">Together</span>
@@ -131,11 +127,8 @@ export function LandingPage() {
 
         {/* Editor mock */}
         <div className="mx-auto mt-14 max-w-4xl overflow-hidden rounded-lg border bg-background shadow-lg">
-          <div className="flex items-center gap-1.5 border-b px-4 py-2">
-            <div className="size-3 rounded-full bg-red-400/80" />
-            <div className="size-3 rounded-full bg-yellow-400/80" />
-            <div className="size-3 rounded-full bg-green-400/80" />
-            <span className="ml-3 text-xs text-muted-foreground">
+          <div className="flex items-center border-b px-4 py-2">
+            <span className="text-xs text-muted-foreground">
               sequence-diagram.puml
             </span>
           </div>
