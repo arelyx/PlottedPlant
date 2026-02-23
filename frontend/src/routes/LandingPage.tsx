@@ -245,7 +245,7 @@ export function LandingPage() {
           Ready to start diagramming?
         </h2>
         <p className="mt-3 text-muted-foreground">
-          Create your first diagram in seconds. No credit card required.
+          Create your first diagram in seconds.
         </p>
         <div className="mt-8">
           <Button asChild size="lg">
