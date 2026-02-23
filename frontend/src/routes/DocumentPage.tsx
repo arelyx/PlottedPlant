@@ -629,7 +629,7 @@ export function DocumentPage() {
                           </div>
                         </div>
                       ) : (
-                        <div className="relative flex items-start justify-center min-h-full">
+                        <div className="relative min-h-full">
                           {renderError && lastGoodSvg && (
                             <div className="absolute top-2 left-2 right-2 z-10 bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2 text-xs">
                               <span className="text-destructive font-medium">
@@ -643,8 +643,8 @@ export function DocumentPage() {
                             </div>
                           )}
                           <div
-                            className={`transition-opacity ${renderError ? "opacity-40" : ""}`}
-                            style={{ transform: `scale(${zoom / 100})`, transformOrigin: "top center" }}
+                            className={`inline-block transition-opacity ${renderError ? "opacity-40" : ""}`}
+                            style={{ transform: `scale(${zoom / 100})`, transformOrigin: "top left" }}
                             dangerouslySetInnerHTML={{
                               __html: svgContent || lastGoodSvg || "",
                             }}

@@ -276,12 +276,13 @@ export function SharedDocumentPage() {
                   </span>
                 )}
               </div>
-              <div className="flex-1 overflow-auto p-4 flex justify-center">
+              <div className="flex-1 overflow-auto p-4">
                 {svgContent ? (
                   <div
+                    className="inline-block"
                     style={{
                       transform: `scale(${zoom / 100})`,
-                      transformOrigin: "top center",
+                      transformOrigin: "top left",
                     }}
                     dangerouslySetInnerHTML={{ __html: svgContent }}
                   />
