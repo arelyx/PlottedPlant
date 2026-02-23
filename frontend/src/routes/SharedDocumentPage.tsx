@@ -19,6 +19,7 @@ import {
 import { accessPublicLink, type PublicDocumentAccess } from "@/lib/shares";
 import { api } from "@/lib/api";
 import { usePreferencesStore } from "@/stores/preferences";
+import { useAuthStore } from "@/stores/auth";
 import { duplicateDocument } from "@/lib/documents";
 
 // --- API helpers ---
@@ -47,7 +48,14 @@ export function SharedDocumentPage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const { resolvedTheme, preferences } = usePreferencesStore();
-  const isAuthenticated = api.getAccessToken() !== null;
+  const { user, isInitialized, initialize } = useAuthStore();
+
+  // Attempt to restore auth session from refresh token cookie
+  useEffect(() => {
+    if (!isInitialized) {
+      initialize();
+    }
+  }, [isInitialized, initialize]);
 
   const [data, setData] = useState<PublicDocumentAccess | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -170,7 +178,7 @@ export function SharedDocumentPage() {
         <div className="flex items-center gap-3">
           <button
             className="text-sm font-bold hover:opacity-80"
-            onClick={() => navigate(isAuthenticated ? "/dashboard" : "/")}
+            onClick={() => navigate(user ? "/dashboard" : "/")}
           >
             PlantUML IDE
           </button>
@@ -201,16 +209,13 @@ export function SharedDocumentPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          {isAuthenticated && (
-            <Button variant="outline" size="sm" onClick={handleDuplicate}>
-              Copy to My Projects
-            </Button>
-          )}
-          {!isAuthenticated && (
-            <Button variant="outline" size="sm" onClick={() => navigate("/login")}>
-              Sign in
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => user ? handleDuplicate() : navigate("/login")}
+          >
+            Duplicate
+          </Button>
         </div>
       </div>
 
