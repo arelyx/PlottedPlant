@@ -83,7 +83,7 @@ export function SharedDocumentPage() {
     return () => {
       if (renderTimeoutRef.current) clearTimeout(renderTimeoutRef.current);
     };
-  }, []);
+  }, [content, triggerRender]);
 
   const handleDuplicate = async () => {
     if (!data) return;
@@ -221,7 +221,7 @@ export function SharedDocumentPage() {
                   </span>
                 )}
               </div>
-              <div className="flex-1 overflow-auto p-4">
+              <div className="flex-1 overflow-auto p-4 flex justify-center">
                 {svgContent ? (
                   <div
                     style={{

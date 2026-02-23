@@ -40,6 +40,23 @@ async def get_current_user_id(request: Request) -> int:
         raise HTTPException(status_code=401, detail="Invalid token payload")
 
 
+async def get_optional_user_id(request: Request) -> int | None:
+    """Extract user ID from JWT if present, otherwise return None."""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+
+    token = auth_header[7:]
+    payload = decode_access_token(token)
+    if payload is None:
+        return None
+
+    try:
+        return int(payload["sub"])
+    except (KeyError, ValueError):
+        return None
+
+
 async def get_current_user(
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),

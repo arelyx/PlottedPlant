@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from app.config import settings
-from app.dependencies import get_current_user_id
+from app.dependencies import get_optional_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ async def _proxy_render(source: str, format: str) -> httpx.Response:
 @router.post("/svg")
 async def render_svg(
     body: RenderRequest,
-    _user_id: int = Depends(get_current_user_id),
+    _user_id: int | None = Depends(get_optional_user_id),
 ):
     """Render PlantUML source as SVG."""
     try:
@@ -76,7 +76,7 @@ async def render_svg(
 @router.post("/png")
 async def render_png(
     body: RenderRequest,
-    _user_id: int = Depends(get_current_user_id),
+    _user_id: int | None = Depends(get_optional_user_id),
 ):
     """Render PlantUML source as PNG."""
     try:
@@ -101,7 +101,7 @@ async def render_png(
 @router.post("/check", response_model=CheckResponse)
 async def check_syntax(
     body: RenderRequest,
-    _user_id: int = Depends(get_current_user_id),
+    _user_id: int | None = Depends(get_optional_user_id),
 ):
     """Validate PlantUML syntax without full render."""
     try:
