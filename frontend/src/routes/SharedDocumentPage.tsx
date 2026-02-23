@@ -83,7 +83,7 @@ export function SharedDocumentPage() {
     return () => {
       if (renderTimeoutRef.current) clearTimeout(renderTimeoutRef.current);
     };
-  }, []);
+  }, [content, triggerRender]);
 
   const handleDuplicate = async () => {
     if (!data) return;
