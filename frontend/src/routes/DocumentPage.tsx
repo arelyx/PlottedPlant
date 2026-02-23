@@ -14,7 +14,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -351,23 +350,49 @@ export function DocumentPage() {
     setEditingTitle(false);
   };
 
-  // --- Export ---
-  const handleExport = async (format: string) => {
-    const url = `/api/v1/documents/${documentId}/export/${format}`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${api.getAccessToken()}` },
-      credentials: "include",
-    });
-    if (!response.ok) return;
-
-    const blob = await response.blob();
+  // --- Export (from current editor content, not saved DB content) ---
+  const downloadBlob = (blob: Blob, filename: string) => {
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    const ext = format === "source" ? "puml" : format;
-    a.download = `${doc?.title || "diagram"}.${ext}`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(a.href);
+  };
+
+  const handleExportSvg = () => {
+    const svg = svgContent || lastGoodSvg;
+    if (!svg) return;
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    downloadBlob(blob, `${doc?.title || "diagram"}.svg`);
+  };
+
+  const handleExportPng = async () => {
+    const source = contentRef.current;
+    if (!source) return;
+    try {
+      const response = await fetch("/api/v1/render/png", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(api.getAccessToken()
+            ? { Authorization: `Bearer ${api.getAccessToken()}` }
+            : {}),
+        },
+        body: JSON.stringify({ source }),
+      });
+      if (!response.ok) return;
+      const blob = await response.blob();
+      downloadBlob(blob, `${doc?.title || "diagram"}.png`);
+    } catch {
+      // silently fail
+    }
+  };
+
+  const handleExportSource = () => {
+    const source = contentRef.current;
+    if (!source) return;
+    const blob = new Blob([source], { type: "text/plain;charset=utf-8" });
+    downloadBlob(blob, `${doc?.title || "diagram"}.puml`);
   };
 
   // --- Error / loading states ---
@@ -489,38 +514,19 @@ export function DocumentPage() {
 
           {/* Export */}
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm">
-                Export
-              </Button>
+            <DropdownMenuTrigger className="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium rounded-md px-3 h-8 hover:bg-accent hover:text-accent-foreground">
+              Export
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleExport("svg")}>
+              <DropdownMenuItem onClick={handleExportSvg} disabled={!svgContent && !lastGoodSvg}>
                 Download SVG
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport("png")}>
+              <DropdownMenuItem onClick={handleExportPng}>
                 Download PNG
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport("pdf")}>
-                Download PDF
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => handleExport("source")}>
+              <DropdownMenuItem onClick={handleExportSource}>
                 Download Source (.puml)
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => navigator.clipboard.writeText(contentRef.current)}
-              >
-                Copy Source
-              </DropdownMenuItem>
-              {svgContent && (
-                <DropdownMenuItem
-                  onClick={() => navigator.clipboard.writeText(svgContent)}
-                >
-                  Copy SVG
-                </DropdownMenuItem>
-              )}
             </DropdownMenuContent>
           </DropdownMenu>
 
