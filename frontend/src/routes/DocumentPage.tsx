@@ -106,6 +106,9 @@ export function DocumentPage() {
   const [collaborators, setCollaborators] = useState<CollaboratorInfo[]>([]);
   const collabSessionRef = useRef<CollaborationSession | null>(null);
   const syncedRef = useRef(false);
+  // Incrementing this key forces a full session recreation with a fresh Y.Doc,
+  // preventing CRDT merge duplication after a WebSocket disconnect.
+  const [reconnectKey, setReconnectKey] = useState(0);
 
   // Content ref — tracks Y.Text value for rendering and export
   const contentRef = useRef("");
@@ -265,6 +268,12 @@ export function DocumentPage() {
           console.warn("Collaboration auth failed:", reason);
           setConnectionStatus("disconnected");
         },
+        onDisconnectedAfterSync() {
+          // The WebSocket dropped after a successful sync. The provider's
+          // auto-reconnect has been cancelled to prevent CRDT duplication.
+          // Schedule a full session recreation with a fresh Y.Doc.
+          setTimeout(() => setReconnectKey((k) => k + 1), 1000);
+        },
       },
     );
 
@@ -303,7 +312,7 @@ export function DocumentPage() {
       syncedRef.current = false;
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [doc, authUser, documentId, triggerRender]);
+  }, [doc, authUser, documentId, triggerRender, reconnectKey]);
 
   // Cleanup render timeout on unmount
   useEffect(() => {
