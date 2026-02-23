@@ -11,6 +11,7 @@ import { DashboardPage } from "@/routes/DashboardPage";
 import { DocumentPage } from "@/routes/DocumentPage";
 import { TemplateBrowserPage } from "@/routes/TemplateBrowserPage";
 import { SharedDocumentPage } from "@/routes/SharedDocumentPage";
+import { LandingPage } from "@/routes/LandingPage";
 
 function App() {
   return (
@@ -41,8 +42,8 @@ function App() {
         {/* Public share access */}
         <Route path="/share/:token" element={<SharedDocumentPage />} />
 
-        {/* Root redirect */}
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        {/* Landing page */}
+        <Route path="/" element={<LandingPage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
