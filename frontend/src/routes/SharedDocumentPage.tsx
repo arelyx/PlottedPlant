@@ -10,6 +10,12 @@ import {
 } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { accessPublicLink, type PublicDocumentAccess } from "@/lib/shares";
 import { api } from "@/lib/api";
 import { usePreferencesStore } from "@/stores/preferences";
@@ -95,14 +101,45 @@ export function SharedDocumentPage() {
     }
   };
 
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   const handleExportSvg = () => {
     if (!svgContent || !data) return;
     const blob = new Blob([svgContent], { type: "image/svg+xml" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${data.document.title}.svg`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadBlob(blob, `${data.document.title}.svg`);
+  };
+
+  const handleExportPng = async () => {
+    if (!content || !data) return;
+    try {
+      const response = await fetch("/api/v1/render/png", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(api.getAccessToken()
+            ? { Authorization: `Bearer ${api.getAccessToken()}` }
+            : {}),
+        },
+        body: JSON.stringify({ source: content }),
+      });
+      if (!response.ok) return;
+      const blob = await response.blob();
+      downloadBlob(blob, `${data.document.title}.png`);
+    } catch {
+      // silently fail
+    }
+  };
+
+  const handleExportSource = () => {
+    if (!content || !data) return;
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    downloadBlob(blob, `${data.document.title}.puml`);
   };
 
   if (loadError) {
@@ -148,9 +185,22 @@ export function SharedDocumentPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={handleExportSvg}>
-            Export SVG
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger className="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium rounded-md px-3 h-8 hover:bg-accent hover:text-accent-foreground">
+              Export
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleExportSvg} disabled={!svgContent}>
+                Download SVG
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportPng}>
+                Download PNG
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportSource}>
+                Download Source (.puml)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {isAuthenticated && (
             <Button variant="outline" size="sm" onClick={handleDuplicate}>
               Copy to My Projects
