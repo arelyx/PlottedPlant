@@ -21,7 +21,7 @@ class PublicShareLink(Base):
     token: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()")
     )
-    permission: Mapped[str] = mapped_column(Text, nullable=False)
+    permission: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'viewer'"))
     created_by_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
