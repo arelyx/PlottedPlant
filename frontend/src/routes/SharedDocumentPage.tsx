@@ -201,16 +201,13 @@ export function SharedDocumentPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          {isAuthenticated && (
-            <Button variant="outline" size="sm" onClick={handleDuplicate}>
-              Copy to My Projects
-            </Button>
-          )}
-          {!isAuthenticated && (
-            <Button variant="outline" size="sm" onClick={() => navigate("/login")}>
-              Sign in
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => isAuthenticated ? handleDuplicate() : navigate("/login")}
+          >
+            Duplicate
+          </Button>
         </div>
       </div>
 
