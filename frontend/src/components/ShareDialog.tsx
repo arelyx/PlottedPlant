@@ -378,10 +378,9 @@ export function ShareDialog({
                     </Button>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">
-                      Anyone with the link can
-                    </span>
-                    <span className="text-xs font-medium">view</span>
+                    <p className="text-xs text-muted-foreground">
+                      Anyone with the link can view
+                    </p>
                     <button
                       className="text-xs text-muted-foreground hover:text-foreground ml-auto"
                       onClick={handleRegenerateLink}
