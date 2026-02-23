@@ -92,11 +92,10 @@ async def list_document_shares(
             created_at=s.created_at,
         ))
 
-    # Get active public link
+    # Get public link (active or inactive — permanent UUID)
     link_result = await db.execute(
         select(PublicShareLink).where(
             PublicShareLink.document_id == document_id,
-            PublicShareLink.is_active.is_(True),
         )
     )
     link = link_result.scalar_one_or_none()
@@ -296,7 +295,6 @@ async def list_folder_shares(
     link_result = await db.execute(
         select(PublicShareLink).where(
             PublicShareLink.folder_id == folder_id,
-            PublicShareLink.is_active.is_(True),
         )
     )
     link = link_result.scalar_one_or_none()
@@ -461,7 +459,11 @@ async def create_document_public_link(
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create or update a public link for a document. Owner only."""
+    """Activate or create a public link for a document. Owner only.
+
+    Each document has at most one permanent public link. If one exists
+    (active or inactive), it is reactivated. Otherwise a new one is created.
+    """
     permission = await resolve_document_permission(db, document_id, user_id)
     if permission is None:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -471,26 +473,24 @@ async def create_document_public_link(
             detail={"code": "OWNER_ONLY", "message": "Only the owner can manage public links."},
         )
 
-    # Check for existing active link
+    # Check for existing link (active or inactive)
     existing_result = await db.execute(
         select(PublicShareLink).where(
             PublicShareLink.document_id == document_id,
-            PublicShareLink.is_active.is_(True),
         )
     )
     existing = existing_result.scalar_one_or_none()
 
     if existing is not None:
-        # Update existing link's permission
-        existing.permission = body.permission
+        existing.is_active = True
         await db.commit()
         await db.refresh(existing)
         return _build_public_link_response(existing)
 
-    # Create new link
+    # First time — create new permanent link
     link = PublicShareLink(
         document_id=document_id,
-        permission=body.permission,
+        permission="viewer",
         created_by_id=user_id,
     )
     db.add(link)
@@ -505,7 +505,7 @@ async def revoke_document_public_link(
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Revoke the public link for a document. Owner only."""
+    """Deactivate the public link for a document. Owner only."""
     permission = await resolve_document_permission(db, document_id, user_id)
     if permission is None:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -518,58 +518,14 @@ async def revoke_document_public_link(
     result = await db.execute(
         select(PublicShareLink).where(
             PublicShareLink.document_id == document_id,
-            PublicShareLink.is_active.is_(True),
         )
     )
     link = result.scalar_one_or_none()
     if link is None:
-        raise HTTPException(status_code=404, detail="No active public link")
+        raise HTTPException(status_code=404, detail="No public link exists")
 
     link.is_active = False
     await db.commit()
-
-
-@router.post(
-    "/documents/{document_id}/public-link/regenerate",
-    response_model=PublicLinkResponse,
-)
-async def regenerate_document_public_link(
-    document_id: int,
-    body: CreatePublicLinkRequest,
-    user_id: int = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-):
-    """Regenerate the public link for a document. Owner only."""
-    permission = await resolve_document_permission(db, document_id, user_id)
-    if permission is None:
-        raise HTTPException(status_code=404, detail="Document not found")
-    if permission != "owner":
-        raise HTTPException(
-            status_code=403,
-            detail={"code": "OWNER_ONLY", "message": "Only the owner can manage public links."},
-        )
-
-    # Revoke current active link
-    result = await db.execute(
-        select(PublicShareLink).where(
-            PublicShareLink.document_id == document_id,
-            PublicShareLink.is_active.is_(True),
-        )
-    )
-    existing = result.scalar_one_or_none()
-    if existing is not None:
-        existing.is_active = False
-
-    # Create new link
-    link = PublicShareLink(
-        document_id=document_id,
-        permission=body.permission,
-        created_by_id=user_id,
-    )
-    db.add(link)
-    await db.commit()
-    await db.refresh(link)
-    return _build_public_link_response(link)
 
 
 # ---------------------------------------------------------------------------
@@ -583,7 +539,11 @@ async def create_folder_public_link(
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create or update a public link for a folder. Owner only."""
+    """Activate or create a public link for a folder. Owner only.
+
+    Each folder has at most one permanent public link. If one exists
+    (active or inactive), it is reactivated. Otherwise a new one is created.
+    """
     permission = await resolve_folder_permission(db, folder_id, user_id)
     if permission is None:
         raise HTTPException(status_code=404, detail="Folder not found")
@@ -593,23 +553,24 @@ async def create_folder_public_link(
             detail={"code": "OWNER_ONLY", "message": "Only the owner can manage public links."},
         )
 
+    # Check for existing link (active or inactive)
     existing_result = await db.execute(
         select(PublicShareLink).where(
             PublicShareLink.folder_id == folder_id,
-            PublicShareLink.is_active.is_(True),
         )
     )
     existing = existing_result.scalar_one_or_none()
 
     if existing is not None:
-        existing.permission = body.permission
+        existing.is_active = True
         await db.commit()
         await db.refresh(existing)
         return _build_public_link_response(existing)
 
+    # First time — create new permanent link
     link = PublicShareLink(
         folder_id=folder_id,
-        permission=body.permission,
+        permission="viewer",
         created_by_id=user_id,
     )
     db.add(link)
@@ -624,7 +585,7 @@ async def revoke_folder_public_link(
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Revoke the public link for a folder. Owner only."""
+    """Deactivate the public link for a folder. Owner only."""
     permission = await resolve_folder_permission(db, folder_id, user_id)
     if permission is None:
         raise HTTPException(status_code=404, detail="Folder not found")
@@ -637,56 +598,14 @@ async def revoke_folder_public_link(
     result = await db.execute(
         select(PublicShareLink).where(
             PublicShareLink.folder_id == folder_id,
-            PublicShareLink.is_active.is_(True),
         )
     )
     link = result.scalar_one_or_none()
     if link is None:
-        raise HTTPException(status_code=404, detail="No active public link")
+        raise HTTPException(status_code=404, detail="No public link exists")
 
     link.is_active = False
     await db.commit()
-
-
-@router.post(
-    "/folders/{folder_id}/public-link/regenerate",
-    response_model=PublicLinkResponse,
-)
-async def regenerate_folder_public_link(
-    folder_id: int,
-    body: CreatePublicLinkRequest,
-    user_id: int = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-):
-    """Regenerate the public link for a folder. Owner only."""
-    permission = await resolve_folder_permission(db, folder_id, user_id)
-    if permission is None:
-        raise HTTPException(status_code=404, detail="Folder not found")
-    if permission != "owner":
-        raise HTTPException(
-            status_code=403,
-            detail={"code": "OWNER_ONLY", "message": "Only the owner can manage public links."},
-        )
-
-    result = await db.execute(
-        select(PublicShareLink).where(
-            PublicShareLink.folder_id == folder_id,
-            PublicShareLink.is_active.is_(True),
-        )
-    )
-    existing = result.scalar_one_or_none()
-    if existing is not None:
-        existing.is_active = False
-
-    link = PublicShareLink(
-        folder_id=folder_id,
-        permission=body.permission,
-        created_by_id=user_id,
-    )
-    db.add(link)
-    await db.commit()
-    await db.refresh(link)
-    return _build_public_link_response(link)
 
 
 # ---------------------------------------------------------------------------
@@ -725,7 +644,7 @@ async def access_public_link(
 
         return {
             "type": "document",
-            "permission": link.permission,
+            "permission": "viewer",
             "document": {
                 "id": doc.id,
                 "title": doc.title,
@@ -755,7 +674,7 @@ async def access_public_link(
 
         return {
             "type": "folder",
-            "permission": link.permission,
+            "permission": "viewer",
             "folder": {
                 "id": folder.id,
                 "name": folder.name,

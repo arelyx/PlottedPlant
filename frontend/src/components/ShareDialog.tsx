@@ -30,10 +30,8 @@ import {
   deleteFolderShare,
   createDocumentPublicLink,
   revokeDocumentPublicLink,
-  regenerateDocumentPublicLink,
   createFolderPublicLink,
   revokeFolderPublicLink,
-  regenerateFolderPublicLink,
   searchUsers,
 } from "@/lib/shares";
 
@@ -179,46 +177,21 @@ export function ShareDialog({
   const handleTogglePublicLink = async (enabled: boolean) => {
     try {
       if (enabled) {
-        const link =
-          resourceType === "document"
-            ? await createDocumentPublicLink(resourceId, "viewer")
-            : await createFolderPublicLink(resourceId, "viewer");
-        setPublicLink(link);
+        if (resourceType === "document") {
+          await createDocumentPublicLink(resourceId);
+        } else {
+          await createFolderPublicLink(resourceId);
+        }
       } else {
         if (resourceType === "document") {
           await revokeDocumentPublicLink(resourceId);
         } else {
           await revokeFolderPublicLink(resourceId);
         }
-        setPublicLink(null);
       }
+      await loadShares();
     } catch (err) {
       console.error("Failed to toggle public link:", err);
-    }
-  };
-
-  const handlePublicLinkPermission = async (permission: string) => {
-    try {
-      const link =
-        resourceType === "document"
-          ? await createDocumentPublicLink(resourceId, permission)
-          : await createFolderPublicLink(resourceId, permission);
-      setPublicLink(link);
-    } catch (err) {
-      console.error("Failed to update link permission:", err);
-    }
-  };
-
-  const handleRegenerateLink = async () => {
-    try {
-      const permission = publicLink?.permission || "viewer";
-      const link =
-        resourceType === "document"
-          ? await regenerateDocumentPublicLink(resourceId, permission)
-          : await regenerateFolderPublicLink(resourceId, permission);
-      setPublicLink(link);
-    } catch (err) {
-      console.error("Failed to regenerate link:", err);
     }
   };
 
@@ -367,7 +340,7 @@ export function ShareDialog({
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Public link</span>
                 <Switch
-                  checked={publicLink !== null}
+                  checked={publicLink?.is_active ?? false}
                   onCheckedChange={handleTogglePublicLink}
                 />
               </div>
@@ -378,7 +351,9 @@ export function ShareDialog({
                     <Input
                       readOnly
                       value={`${window.location.origin}/share/${publicLink.token}`}
-                      className="flex-1 h-8 text-xs font-mono bg-muted"
+                      className={`flex-1 h-8 text-xs font-mono ${
+                        publicLink.is_active ? "bg-muted" : "bg-muted opacity-50"
+                      }`}
                       onClick={(e) => (e.target as HTMLInputElement).select()}
                     />
                     <Button
@@ -386,34 +361,16 @@ export function ShareDialog({
                       size="sm"
                       className="h-8 text-xs"
                       onClick={copyLink}
+                      disabled={!publicLink.is_active}
                     >
                       Copy
                     </Button>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">
-                      Anyone with the link can
-                    </span>
-                    <Select
-                      value={publicLink.permission}
-                      onValueChange={handlePublicLinkPermission}
-                    >
-                      <SelectTrigger className="w-20 h-7 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="editor">edit</SelectItem>
-                        <SelectItem value="viewer">view</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <button
-                      className="text-xs text-muted-foreground hover:text-foreground ml-auto"
-                      onClick={handleRegenerateLink}
-                      title="Generate a new link (old link will stop working)"
-                    >
-                      Regenerate
-                    </button>
-                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {publicLink.is_active
+                      ? "Anyone with the link can view"
+                      : "Link is currently disabled"}
+                  </p>
                 </div>
               )}
             </div>

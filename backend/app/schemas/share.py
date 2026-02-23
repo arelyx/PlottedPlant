@@ -33,7 +33,7 @@ class UpdateShareRequest(BaseModel):
 
 
 class CreatePublicLinkRequest(BaseModel):
-    permission: str = Field(pattern="^(editor|viewer)$")
+    pass
 
 
 # --- Response schemas ---
