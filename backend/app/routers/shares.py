@@ -481,8 +481,7 @@ async def create_document_public_link(
     existing = existing_result.scalar_one_or_none()
 
     if existing is not None:
-        # Update existing link's permission
-        existing.permission = body.permission
+        # Public links are always viewer-only
         await db.commit()
         await db.refresh(existing)
         return _build_public_link_response(existing)
@@ -490,7 +489,7 @@ async def create_document_public_link(
     # Create new link
     link = PublicShareLink(
         document_id=document_id,
-        permission=body.permission,
+        permission="viewer",
         created_by_id=user_id,
     )
     db.add(link)
@@ -560,10 +559,10 @@ async def regenerate_document_public_link(
     if existing is not None:
         existing.is_active = False
 
-    # Create new link
+    # Create new link — public links are always viewer-only
     link = PublicShareLink(
         document_id=document_id,
-        permission=body.permission,
+        permission="viewer",
         created_by_id=user_id,
     )
     db.add(link)
@@ -602,14 +601,14 @@ async def create_folder_public_link(
     existing = existing_result.scalar_one_or_none()
 
     if existing is not None:
-        existing.permission = body.permission
+        # Public links are always viewer-only
         await db.commit()
         await db.refresh(existing)
         return _build_public_link_response(existing)
 
     link = PublicShareLink(
         folder_id=folder_id,
-        permission=body.permission,
+        permission="viewer",
         created_by_id=user_id,
     )
     db.add(link)
@@ -678,9 +677,10 @@ async def regenerate_folder_public_link(
     if existing is not None:
         existing.is_active = False
 
+    # Public links are always viewer-only
     link = PublicShareLink(
         folder_id=folder_id,
-        permission=body.permission,
+        permission="viewer",
         created_by_id=user_id,
     )
     db.add(link)
@@ -725,7 +725,7 @@ async def access_public_link(
 
         return {
             "type": "document",
-            "permission": link.permission,
+            "permission": "viewer",
             "document": {
                 "id": doc.id,
                 "title": doc.title,
@@ -755,7 +755,7 @@ async def access_public_link(
 
         return {
             "type": "folder",
-            "permission": link.permission,
+            "permission": "viewer",
             "folder": {
                 "id": folder.id,
                 "name": folder.name,
