@@ -1,5 +1,7 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import Editor from "@monaco-editor/react";
+import { registerPlantUMLLanguage } from "@/lib/plantuml-monaco";
 import {
   Code2,
   Eye,
@@ -73,6 +75,37 @@ export function LandingPage() {
     if (!isInitialized) initialize();
   }, [isInitialized, initialize]);
 
+  // Live render state
+  const [svgContent, setSvgContent] = useState<string | null>(null);
+  const [rendering, setRendering] = useState(false);
+  const renderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const triggerRender = useCallback((source: string) => {
+    if (renderTimeoutRef.current) clearTimeout(renderTimeoutRef.current);
+    renderTimeoutRef.current = setTimeout(async () => {
+      setRendering(true);
+      try {
+        const res = await fetch("/api/v1/render/svg", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source }),
+        });
+        if (res.ok) setSvgContent(await res.text());
+      } catch {
+        // silently fail — preview just won't update
+      }
+      setRendering(false);
+    }, 400);
+  }, []);
+
+  // Render the sample code on mount
+  useEffect(() => {
+    triggerRender(SAMPLE_CODE);
+    return () => {
+      if (renderTimeoutRef.current) clearTimeout(renderTimeoutRef.current);
+    };
+  }, [triggerRender]);
+
   const ctaPath = user ? "/dashboard" : "/register";
   const ctaLabel = user ? "Go to Dashboard" : "Get Started";
 
@@ -125,30 +158,50 @@ export function LandingPage() {
           </Button>
         </div>
 
-        {/* Editor mock */}
-        <div className="mx-auto mt-14 max-w-4xl overflow-hidden rounded-lg border bg-background shadow-lg">
-          <div className="flex items-center border-b px-4 py-2">
+        {/* Live editor */}
+        <div className="mx-auto mt-14 max-w-5xl overflow-hidden rounded-lg border bg-background shadow-lg text-left">
+          <div className="flex items-center justify-between border-b px-4 py-2">
             <span className="text-xs text-muted-foreground">
-              sequence-diagram.puml
+              Try it — edit the code below
             </span>
+            {rendering && (
+              <span className="text-xs text-muted-foreground">
+                Rendering...
+              </span>
+            )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2">
             {/* Code pane */}
-            <div className="border-b bg-muted/30 p-4 text-left md:border-b-0 md:border-r">
-              <pre className="overflow-x-auto text-[13px] leading-relaxed text-foreground/80">
-                <code>{SAMPLE_CODE}</code>
-              </pre>
+            <div className="h-[380px] border-b md:border-b-0 md:border-r">
+              <Editor
+                height="100%"
+                defaultValue={SAMPLE_CODE}
+                language="plantuml"
+                theme="vs-dark"
+                onMount={(_editor, monaco) => registerPlantUMLLanguage(monaco)}
+                onChange={(val) => {
+                  if (val !== undefined) triggerRender(val);
+                }}
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 13,
+                  lineNumbers: "on",
+                  scrollBeyondLastLine: false,
+                  automaticLayout: true,
+                  padding: { top: 8 },
+                  wordWrap: "on",
+                }}
+              />
             </div>
             {/* Preview pane */}
-            <div className="flex items-center justify-center bg-muted/10 p-6">
-              <div className="space-y-2 text-muted-foreground">
-                <div className="mx-auto flex items-center justify-center rounded-md border border-dashed border-muted-foreground/30 px-6 py-10">
-                  <div className="space-y-3 text-center">
-                    <Eye className="mx-auto size-8 text-muted-foreground/50" />
-                    <p className="text-sm">Live diagram preview</p>
-                  </div>
+            <div className="h-[380px] overflow-auto bg-white p-4">
+              {svgContent ? (
+                <div dangerouslySetInnerHTML={{ __html: svgContent }} />
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-neutral-400">
+                  {rendering ? "Rendering..." : "Preview will appear here"}
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
