@@ -181,8 +181,8 @@ export function ShareDialog({
       if (enabled) {
         const link =
           resourceType === "document"
-            ? await createDocumentPublicLink(resourceId, "viewer")
-            : await createFolderPublicLink(resourceId, "viewer");
+            ? await createDocumentPublicLink(resourceId)
+            : await createFolderPublicLink(resourceId);
         setPublicLink(link);
       } else {
         if (resourceType === "document") {
@@ -197,25 +197,12 @@ export function ShareDialog({
     }
   };
 
-  const handlePublicLinkPermission = async (permission: string) => {
-    try {
-      const link =
-        resourceType === "document"
-          ? await createDocumentPublicLink(resourceId, permission)
-          : await createFolderPublicLink(resourceId, permission);
-      setPublicLink(link);
-    } catch (err) {
-      console.error("Failed to update link permission:", err);
-    }
-  };
-
   const handleRegenerateLink = async () => {
     try {
-      const permission = publicLink?.permission || "viewer";
       const link =
         resourceType === "document"
-          ? await regenerateDocumentPublicLink(resourceId, permission)
-          : await regenerateFolderPublicLink(resourceId, permission);
+          ? await regenerateDocumentPublicLink(resourceId)
+          : await regenerateFolderPublicLink(resourceId);
       setPublicLink(link);
     } catch (err) {
       console.error("Failed to regenerate link:", err);
@@ -394,18 +381,7 @@ export function ShareDialog({
                     <span className="text-xs text-muted-foreground">
                       Anyone with the link can
                     </span>
-                    <Select
-                      value={publicLink.permission}
-                      onValueChange={handlePublicLinkPermission}
-                    >
-                      <SelectTrigger className="w-20 h-7 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="editor">edit</SelectItem>
-                        <SelectItem value="viewer">view</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <span className="text-xs font-medium">view</span>
                     <button
                       className="text-xs text-muted-foreground hover:text-foreground ml-auto"
                       onClick={handleRegenerateLink}

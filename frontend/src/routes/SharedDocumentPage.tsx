@@ -132,7 +132,7 @@ export function SharedDocumentPage() {
     );
   }
 
-  const isReadOnly = data.permission === "viewer";
+  const isReadOnly = true; // Public links are always viewer-only
 
   return (
     <div className="flex flex-col h-screen">
@@ -148,7 +148,7 @@ export function SharedDocumentPage() {
           <span className="text-muted-foreground">/</span>
           <span className="text-sm font-medium">{data.document.title}</span>
           <Badge variant="secondary" className="text-xs">
-            {isReadOnly ? "View only" : "Edit access"}
+            View only
           </Badge>
           <span className="text-xs text-muted-foreground">
             Shared by {data.document.owner.display_name}

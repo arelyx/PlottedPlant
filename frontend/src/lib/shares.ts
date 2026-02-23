@@ -113,13 +113,10 @@ export async function deleteFolderShare(folderId: number, shareId: number) {
 
 // --- Public Links ---
 
-export async function createDocumentPublicLink(
-  documentId: number,
-  permission: string
-) {
+export async function createDocumentPublicLink(documentId: number) {
   return api.request<PublicLink>(`/documents/${documentId}/public-link`, {
     method: "POST",
-    body: JSON.stringify({ permission }),
+    body: JSON.stringify({}),
   });
 }
 
@@ -129,26 +126,20 @@ export async function revokeDocumentPublicLink(documentId: number) {
   });
 }
 
-export async function regenerateDocumentPublicLink(
-  documentId: number,
-  permission: string
-) {
+export async function regenerateDocumentPublicLink(documentId: number) {
   return api.request<PublicLink>(
     `/documents/${documentId}/public-link/regenerate`,
     {
       method: "POST",
-      body: JSON.stringify({ permission }),
+      body: JSON.stringify({}),
     }
   );
 }
 
-export async function createFolderPublicLink(
-  folderId: number,
-  permission: string
-) {
+export async function createFolderPublicLink(folderId: number) {
   return api.request<PublicLink>(`/folders/${folderId}/public-link`, {
     method: "POST",
-    body: JSON.stringify({ permission }),
+    body: JSON.stringify({}),
   });
 }
 
@@ -158,15 +149,12 @@ export async function revokeFolderPublicLink(folderId: number) {
   });
 }
 
-export async function regenerateFolderPublicLink(
-  folderId: number,
-  permission: string
-) {
+export async function regenerateFolderPublicLink(folderId: number) {
   return api.request<PublicLink>(
     `/folders/${folderId}/public-link/regenerate`,
     {
       method: "POST",
-      body: JSON.stringify({ permission }),
+      body: JSON.stringify({}),
     }
   );
 }
