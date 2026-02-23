@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Editor, { type OnMount } from "@monaco-editor/react";
 import type * as Monaco from "monaco-editor";
+import { registerPlantUMLLanguage } from "@/lib/plantuml-monaco";
 import {
   Panel,
   Group as PanelGroup,
@@ -180,6 +181,7 @@ export function SharedDocumentPage() {
               language="plantuml"
               theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
               value={content}
+              onMount={(_editor, monaco) => registerPlantUMLLanguage(monaco)}
               onChange={(val) => {
                 if (val !== undefined && !isReadOnly) {
                   setContent(val);
