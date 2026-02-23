@@ -44,6 +44,48 @@ function pickColor(usedColors: Set<string>): (typeof CURSOR_COLORS)[number] {
   return CURSOR_COLORS[0];
 }
 
+// --- Dynamic CSS injection for remote cursor colors & name labels ---
+
+const CURSOR_STYLE_ID = "yjs-remote-cursors";
+
+/**
+ * Inject/update a <style> element with per-collaborator CSS rules for
+ * y-monaco's remote selection and cursor-head decorations.
+ */
+function updateRemoteCursorStyles(
+  awareness: { getStates: () => Map<number, Record<string, unknown>> },
+  localClientId: number,
+): void {
+  let styleEl = document.getElementById(CURSOR_STYLE_ID) as HTMLStyleElement | null;
+  if (!styleEl) {
+    styleEl = document.createElement("style");
+    styleEl.id = CURSOR_STYLE_ID;
+    document.head.appendChild(styleEl);
+  }
+
+  let css = "";
+  awareness.getStates().forEach((state, clientID) => {
+    if (clientID === localClientId) return;
+    const user = state.user as
+      | { color?: string; colorLight?: string; name?: string }
+      | undefined;
+    if (!user?.color) return;
+
+    const bg = user.colorLight || user.color + "33";
+    const name = (user.name || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+
+    css += `.yRemoteSelection-${clientID}{background-color:${bg}}`;
+    css += `.yRemoteSelectionHead-${clientID}{border-left:2px solid ${user.color}}`;
+    css += `.yRemoteSelectionHead-${clientID}::after{content:"${name}";background-color:${user.color}}`;
+  });
+
+  styleEl.textContent = css;
+}
+
+function removeRemoteCursorStyles(): void {
+  document.getElementById(CURSOR_STYLE_ID)?.remove();
+}
+
 export interface CollaborationSession {
   provider: HocuspocusProvider;
   ydoc: Y.Doc;
@@ -123,6 +165,14 @@ export function createCollaborationSession(
     permission,
   });
 
+  // Wire up dynamic CSS injection for remote cursor styles
+  const awarenessChangeHandler = () => {
+    if (provider.awareness) {
+      updateRemoteCursorStyles(provider.awareness, ydoc.clientID);
+    }
+  };
+  provider.awareness?.on("change", awarenessChangeHandler);
+
   let binding: MonacoBinding | null = null;
 
   const session: CollaborationSession = {
@@ -135,6 +185,8 @@ export function createCollaborationSession(
         session.binding.destroy();
         session.binding = null;
       }
+      provider.awareness?.off("change", awarenessChangeHandler);
+      removeRemoteCursorStyles();
       provider.destroy();
       ydoc.destroy();
     },

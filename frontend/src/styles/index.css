@@ -122,3 +122,18 @@
     @apply bg-background text-foreground;
     }
 }
+
+/* Remote collaboration cursor decorations (y-monaco) */
+.yRemoteSelectionHead::after {
+  position: absolute;
+  font-size: 11px;
+  font-family: system-ui, sans-serif;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px 3px 3px 0;
+  white-space: nowrap;
+  color: white;
+  pointer-events: none;
+  bottom: 100%;
+  left: -2px;
+}
