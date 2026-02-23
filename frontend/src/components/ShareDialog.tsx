@@ -30,8 +30,6 @@ import {
   deleteFolderShare,
   createDocumentPublicLink,
   revokeDocumentPublicLink,
-  createFolderPublicLink,
-  revokeFolderPublicLink,
   searchUsers,
 } from "@/lib/shares";
 
@@ -177,17 +175,9 @@ export function ShareDialog({
   const handleTogglePublicLink = async (enabled: boolean) => {
     try {
       if (enabled) {
-        if (resourceType === "document") {
-          await createDocumentPublicLink(resourceId);
-        } else {
-          await createFolderPublicLink(resourceId);
-        }
+        await createDocumentPublicLink(resourceId);
       } else {
-        if (resourceType === "document") {
-          await revokeDocumentPublicLink(resourceId);
-        } else {
-          await revokeFolderPublicLink(resourceId);
-        }
+        await revokeDocumentPublicLink(resourceId);
       }
       await loadShares();
     } catch (err) {
@@ -335,45 +325,47 @@ export function ShareDialog({
               ))}
             </div>
 
-            {/* Public link */}
-            <div className="border-t pt-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Public link</span>
-                <Switch
-                  checked={publicLink?.is_active ?? false}
-                  onCheckedChange={handleTogglePublicLink}
-                />
-              </div>
-
-              {publicLink && (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <Input
-                      readOnly
-                      value={`${window.location.origin}/share/${publicLink.token}`}
-                      className={`flex-1 h-8 text-xs font-mono ${
-                        publicLink.is_active ? "bg-muted" : "bg-muted opacity-50"
-                      }`}
-                      onClick={(e) => (e.target as HTMLInputElement).select()}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={copyLink}
-                      disabled={!publicLink.is_active}
-                    >
-                      Copy
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {publicLink.is_active
-                      ? "Anyone with the link can view"
-                      : "Link is currently disabled"}
-                  </p>
+            {/* Public link — documents only */}
+            {resourceType === "document" && (
+              <div className="border-t pt-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Public link</span>
+                  <Switch
+                    checked={publicLink?.is_active ?? false}
+                    onCheckedChange={handleTogglePublicLink}
+                  />
                 </div>
-              )}
-            </div>
+
+                {publicLink && (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <Input
+                        readOnly
+                        value={`${window.location.origin}/share/${publicLink.token}`}
+                        className={`flex-1 h-8 text-xs font-mono ${
+                          publicLink.is_active ? "bg-muted" : "bg-muted opacity-50"
+                        }`}
+                        onClick={(e) => (e.target as HTMLInputElement).select()}
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={copyLink}
+                        disabled={!publicLink.is_active}
+                      >
+                        Copy
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {publicLink.is_active
+                        ? "Anyone with the link can view"
+                        : "Link is currently disabled"}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </DialogContent>

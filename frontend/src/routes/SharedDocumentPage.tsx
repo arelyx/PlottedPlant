@@ -10,10 +10,7 @@ import {
 } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  accessPublicLink,
-  type PublicDocumentAccess,
-} from "@/lib/shares";
+import { accessPublicLink, type PublicDocumentAccess } from "@/lib/shares";
 import { api } from "@/lib/api";
 import { usePreferencesStore } from "@/stores/preferences";
 import { duplicateDocument } from "@/lib/documents";
@@ -62,13 +59,8 @@ export function SharedDocumentPage() {
     (async () => {
       try {
         const result = await accessPublicLink(token);
-        if (result.type === "document") {
-          setData(result);
-          setContent(result.document.content);
-        } else {
-          // Folder access — not a full editor, just redirect or show list
-          setLoadError("Folder links are not supported in this view.");
-        }
+        setData(result);
+        setContent(result.document.content);
       } catch {
         setLoadError("This link doesn't exist or has been revoked.");
       }

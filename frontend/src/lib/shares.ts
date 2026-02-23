@@ -126,19 +126,6 @@ export async function revokeDocumentPublicLink(documentId: number) {
   });
 }
 
-export async function createFolderPublicLink(folderId: number) {
-  return api.request<PublicLink>(`/folders/${folderId}/public-link`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
-}
-
-export async function revokeFolderPublicLink(folderId: number) {
-  return api.request<void>(`/folders/${folderId}/public-link`, {
-    method: "DELETE",
-  });
-}
-
 // --- User Search ---
 
 export async function searchUsers(query: string, limit = 10) {
@@ -161,18 +148,6 @@ export interface PublicDocumentAccess {
   };
 }
 
-export interface PublicFolderAccess {
-  type: "folder";
-  permission: string;
-  folder: {
-    id: number;
-    name: string;
-    documents: { id: number; title: string; updated_at: string }[];
-  };
-}
-
-export type PublicAccess = PublicDocumentAccess | PublicFolderAccess;
-
 export async function accessPublicLink(token: string) {
-  return api.request<PublicAccess>(`/share/${token}`, { skipAuth: true });
+  return api.request<PublicDocumentAccess>(`/share/${token}`, { skipAuth: true });
 }
