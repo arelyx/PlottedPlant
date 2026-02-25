@@ -30,8 +30,8 @@ export async function getTemplate(id: number): Promise<TemplateDetail> {
 export function getTemplatePreviewUrl(name: string): string {
   const slug = name
     .toLowerCase()
-    .replace(/\(|\)/g, "")
-    .replace(/\s+/g, "-")
+    .replace(/[()]/g, "")
+    .replace(/[/\s]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/-$/, "");
   return `/templates/${slug}.svg`;
