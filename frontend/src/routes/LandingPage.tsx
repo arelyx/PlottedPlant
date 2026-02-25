@@ -382,6 +382,11 @@ export function LandingPage() {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* Templates link */}
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/templates">Templates</Link>
+          </Button>
+
           {/* Share & History → pitch modal */}
           <Button
             variant="ghost"
