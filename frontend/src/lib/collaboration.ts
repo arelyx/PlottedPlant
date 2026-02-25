@@ -107,10 +107,15 @@ export function createCollaborationSession(
     onCollaborators?: (collaborators: CollaboratorInfo[]) => void;
     onSynced?: () => void;
     onAuthenticationFailed?: (reason: string) => void;
+    onDisconnectedAfterSync?: () => void;
   } = {},
 ): CollaborationSession {
   const ydoc = new Y.Doc();
   const ytext = ydoc.getText("monaco");
+
+  // Track whether this session has ever successfully synced.
+  // Used to detect reconnections with stale CRDT state.
+  let wasSynced = false;
 
   // Determine WebSocket URL
   // Nginx routes /collaboration to Hocuspocus upstream
@@ -124,8 +129,27 @@ export function createCollaborationSession(
     token: () => api.getAccessToken() || "",
     onStatus({ status }) {
       callbacks.onStatus?.(status as ConnectionStatus);
+
+      if (status === "disconnected" && wasSynced) {
+        // CRITICAL: Prevent auto-reconnect with stale Y.Doc state.
+        //
+        // When the WebSocket drops, the server destroys the room (after the
+        // last client disconnects). If HocuspocusProvider auto-reconnects,
+        // the server creates a new room and inserts DB content into a fresh
+        // Y.Text via onLoadDocument. Meanwhile, the client still holds the
+        // old Y.Doc with prior operations. Yjs CRDT merge treats both sets
+        // of operations as concurrent insertions, DOUBLING the content.
+        //
+        // By calling disconnect() we cancel the provider's reconnect timer.
+        // The parent component (DocumentPage) will detect this via the
+        // onDisconnectedAfterSync callback and recreate the entire session
+        // with a fresh Y.Doc, eliminating the stale state.
+        queueMicrotask(() => provider.disconnect());
+        callbacks.onDisconnectedAfterSync?.();
+      }
     },
     onSynced() {
+      wasSynced = true;
       callbacks.onSynced?.();
     },
     onAuthenticationFailed({ reason }) {
