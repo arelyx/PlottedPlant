@@ -2,7 +2,7 @@
 # This is only used to BUILD the static assets.
 # The output (dist/) is then copied to Nginx's html directory.
 
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 

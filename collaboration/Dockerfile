@@ -1,7 +1,7 @@
 # collaboration/Dockerfile
 
 # ── Build stage ──
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /build
 
@@ -14,7 +14,7 @@ COPY src/ ./src/
 RUN npm run build
 
 # ── Runtime stage ──
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
