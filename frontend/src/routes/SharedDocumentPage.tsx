@@ -180,7 +180,7 @@ export function SharedDocumentPage() {
             className="text-sm font-bold hover:opacity-80"
             onClick={() => navigate(user ? "/dashboard" : "/")}
           >
-            PlantUML IDE
+            PlottedPlant
           </button>
           <span className="text-muted-foreground">/</span>
           <span className="text-sm font-medium">{data.document.title}</span>

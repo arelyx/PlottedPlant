@@ -51,7 +51,7 @@ export function AppLayout() {
         <div className="flex h-14 items-center justify-between px-4">
           <div className="flex items-center gap-4">
             <Link to="/dashboard" className="text-lg font-semibold">
-              PlantUML IDE
+              PlottedPlant
             </Link>
             <nav className="flex items-center gap-2">
               <Link

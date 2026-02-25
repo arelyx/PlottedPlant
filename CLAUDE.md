@@ -1,8 +1,8 @@
-# CLAUDE.md — PlantUML Collaborative IDE
+# CLAUDE.md — PlottedPlant
 
 ## Project Overview
 
-This is a web-based collaborative PlantUML IDE — think Overleaf but for PlantUML diagrams. Users create, edit, share, and collaborate on PlantUML diagrams through a browser-based interface with a Monaco code editor, live diagram preview, real-time multi-user collaboration via Yjs CRDTs, version history, and document sharing.
+This is PlottedPlant, a web-based collaborative PlantUML IDE — think Overleaf but for PlantUML diagrams. Users create, edit, share, and collaborate on PlantUML diagrams through a browser-based interface with a Monaco code editor, live diagram preview, real-time multi-user collaboration via Yjs CRDTs, version history, and document sharing.
 
 The target is 50-500 users on a single VPS. The architecture prioritizes simplicity and correctness over premature scalability.
 
