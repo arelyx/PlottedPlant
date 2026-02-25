@@ -39,12 +39,12 @@ export interface UserSearchResult {
 
 // --- Document Shares ---
 
-export async function getDocumentShares(documentId: number) {
+export async function getDocumentShares(documentId: string) {
   return api.request<ShareListResponse>(`/documents/${documentId}/shares`);
 }
 
 export async function createDocumentShare(
-  documentId: number,
+  documentId: string,
   userId: number,
   permission: string
 ) {
@@ -55,7 +55,7 @@ export async function createDocumentShare(
 }
 
 export async function updateDocumentShare(
-  documentId: number,
+  documentId: string,
   shareId: number,
   permission: string
 ) {
@@ -69,7 +69,7 @@ export async function updateDocumentShare(
 }
 
 export async function deleteDocumentShare(
-  documentId: number,
+  documentId: string,
   shareId: number
 ) {
   return api.request<void>(`/documents/${documentId}/shares/${shareId}`, {
@@ -113,14 +113,14 @@ export async function deleteFolderShare(folderId: number, shareId: number) {
 
 // --- Public Links ---
 
-export async function createDocumentPublicLink(documentId: number) {
+export async function createDocumentPublicLink(documentId: string) {
   return api.request<PublicLink>(`/documents/${documentId}/public-link`, {
     method: "POST",
     body: JSON.stringify({}),
   });
 }
 
-export async function revokeDocumentPublicLink(documentId: number) {
+export async function revokeDocumentPublicLink(documentId: string) {
   return api.request<void>(`/documents/${documentId}/public-link`, {
     method: "DELETE",
   });
@@ -140,7 +140,7 @@ export interface PublicDocumentAccess {
   type: "document";
   permission: string;
   document: {
-    id: number;
+    id: string;
     title: string;
     content: string;
     owner: { display_name: string };

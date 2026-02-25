@@ -37,7 +37,7 @@ interface ShareDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   resourceType: "document" | "folder";
-  resourceId: number;
+  resourceId: string | number;
   resourceName: string;
 }
 
@@ -67,8 +67,8 @@ export function ShareDialog({
     try {
       const data =
         resourceType === "document"
-          ? await getDocumentShares(resourceId)
-          : await getFolderShares(resourceId);
+          ? await getDocumentShares(resourceId as string)
+          : await getFolderShares(resourceId as number);
       setOwner(data.owner);
       setShares(data.shares);
       setPublicLink(data.public_link);
@@ -130,9 +130,9 @@ export function ShareDialog({
   const handleAddShare = async (user: UserSearchResult) => {
     try {
       if (resourceType === "document") {
-        await createDocumentShare(resourceId, user.id, newPermission);
+        await createDocumentShare(resourceId as string, user.id, newPermission);
       } else {
-        await createFolderShare(resourceId, user.id, newPermission);
+        await createFolderShare(resourceId as number, user.id, newPermission);
       }
       setSearchQuery("");
       setSearchResults([]);
@@ -149,9 +149,9 @@ export function ShareDialog({
   ) => {
     try {
       if (resourceType === "document") {
-        await updateDocumentShare(resourceId, shareId, permission);
+        await updateDocumentShare(resourceId as string, shareId, permission);
       } else {
-        await updateFolderShare(resourceId, shareId, permission);
+        await updateFolderShare(resourceId as number, shareId, permission);
       }
       loadShares();
     } catch (err) {
@@ -162,9 +162,9 @@ export function ShareDialog({
   const handleRemoveShare = async (shareId: number) => {
     try {
       if (resourceType === "document") {
-        await deleteDocumentShare(resourceId, shareId);
+        await deleteDocumentShare(resourceId as string, shareId);
       } else {
-        await deleteFolderShare(resourceId, shareId);
+        await deleteFolderShare(resourceId as number, shareId);
       }
       loadShares();
     } catch (err) {
@@ -175,9 +175,9 @@ export function ShareDialog({
   const handleTogglePublicLink = async (enabled: boolean) => {
     try {
       if (enabled) {
-        await createDocumentPublicLink(resourceId);
+        await createDocumentPublicLink(resourceId as string);
       } else {
-        await revokeDocumentPublicLink(resourceId);
+        await revokeDocumentPublicLink(resourceId as string);
       }
       await loadShares();
     } catch (err) {

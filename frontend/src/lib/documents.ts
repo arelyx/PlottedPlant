@@ -24,7 +24,7 @@ export interface FolderItem {
 }
 
 export interface DocumentItem {
-  id: number;
+  id: string;
   title: string;
   folder: FolderBrief | null;
   permission: string;
@@ -36,7 +36,7 @@ export interface DocumentItem {
 }
 
 export interface DocumentDetail {
-  id: number;
+  id: string;
   title: string;
   folder: FolderBrief | null;
   permission: string;
@@ -50,7 +50,7 @@ export interface DocumentDetail {
 }
 
 export interface DocumentCreateResponse {
-  id: number;
+  id: string;
   title: string;
   folder: FolderBrief | null;
   permission: string;
@@ -131,12 +131,12 @@ export async function createDocument(data: {
   });
 }
 
-export async function getDocument(documentId: number) {
+export async function getDocument(documentId: string) {
   return api.request<DocumentDetail>(`/documents/${documentId}`);
 }
 
 export async function updateDocument(
-  documentId: number,
+  documentId: string,
   data: { title?: string; folder_id?: number | null }
 ) {
   return api.request<DocumentDetail>(`/documents/${documentId}`, {
@@ -145,12 +145,12 @@ export async function updateDocument(
   });
 }
 
-export async function deleteDocument(documentId: number) {
+export async function deleteDocument(documentId: string) {
   return api.request<void>(`/documents/${documentId}`, { method: "DELETE" });
 }
 
 export async function duplicateDocument(
-  documentId: number,
+  documentId: string,
   data?: { title?: string; folder_id?: number | null }
 ) {
   return api.request<DocumentCreateResponse>(
@@ -163,7 +163,7 @@ export async function duplicateDocument(
 }
 
 export async function updateDocumentContent(
-  documentId: number,
+  documentId: string,
   content: string
 ) {
   return api.request<ContentUpdateResponse>(

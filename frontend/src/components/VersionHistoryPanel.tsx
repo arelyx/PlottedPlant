@@ -23,7 +23,7 @@ import { VersionPreviewDialog } from "@/components/VersionPreviewDialog";
 import { VersionDiffDialog } from "@/components/VersionDiffDialog";
 
 interface VersionHistoryPanelProps {
-  documentId: number;
+  documentId: string;
   permission: string;
   refreshKey?: number;
   onClose: () => void;
