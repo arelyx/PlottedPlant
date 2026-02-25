@@ -35,8 +35,12 @@ function App() {
           }
         >
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/templates" element={<TemplateBrowserPage />} />
           <Route path="/documents/:id" element={<DocumentPage />} />
+        </Route>
+
+        {/* Public app routes (AppLayout without AuthGuard) */}
+        <Route element={<AppLayout />}>
+          <Route path="/templates" element={<TemplateBrowserPage />} />
         </Route>
 
         {/* Public share access */}

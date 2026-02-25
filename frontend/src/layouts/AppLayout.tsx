@@ -5,10 +5,14 @@ import { usePreferencesStore } from "@/stores/preferences";
 import { Button } from "@/components/ui/button";
 
 export function AppLayout() {
-  const { user, logout } = useAuthStore();
+  const { user, logout, isInitialized, initialize } = useAuthStore();
   const { preferences, isLoaded, resolvedTheme, load, update } =
     usePreferencesStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isInitialized) initialize();
+  }, [isInitialized, initialize]);
 
   useEffect(() => {
     if (!isLoaded) load();
@@ -50,7 +54,7 @@ export function AppLayout() {
       <header className="border-b">
         <div className="flex h-14 items-center justify-between px-4">
           <div className="flex items-center gap-4">
-            <Link to="/dashboard" className="text-lg font-semibold">
+            <Link to={user ? "/dashboard" : "/"} className="text-lg font-semibold">
               PlottedPlant
             </Link>
             <nav className="flex items-center gap-2">
@@ -72,7 +76,7 @@ export function AppLayout() {
             <Button variant="ghost" size="sm" onClick={cycleTheme} title={`Theme: ${preferences.theme}`}>
               {themeIcon}
             </Button>
-            {user && (
+            {user ? (
               <>
                 <span className="text-sm text-muted-foreground">
                   {user.display_name}
@@ -84,6 +88,20 @@ export function AppLayout() {
                   Sign out
                 </button>
               </>
+            ) : (
+              isInitialized && (
+                <>
+                  <Link
+                    to="/login"
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    Sign in
+                  </Link>
+                  <Link to="/register">
+                    <Button size="sm">Create account</Button>
+                  </Link>
+                </>
+              )
             )}
           </div>
         </div>
