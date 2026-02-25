@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_current_user_id, get_db
+from app.dependencies import get_current_user_id, get_db, parse_document_uuid
 from app.models.document_content import DocumentContent
 from app.models.document_version import DocumentVersion
 from app.models.user import User
@@ -22,6 +22,7 @@ from app.schemas.version import (
 from app.services.document import (
     create_version,
     get_document_with_permission,
+    resolve_document_internal_id,
 )
 
 router = APIRouter(prefix="/api/v1/documents", tags=["versions"])
@@ -41,7 +42,7 @@ async def _get_user_brief(db: AsyncSession, user_id: int | None) -> UserBrief | 
 
 @router.get("/{document_id}/versions", response_model=VersionListResponse)
 async def list_versions(
-    document_id: int,
+    document_id: str,
     cursor: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     source: str | None = Query(None),
@@ -49,7 +50,12 @@ async def list_versions(
     db: AsyncSession = Depends(get_db),
 ):
     """List document versions. Owner and editor only (viewers get 403)."""
-    doc, permission = await get_document_with_permission(db, document_id, user_id)
+    doc_uuid = parse_document_uuid(document_id)
+    internal_id = await resolve_document_internal_id(db, doc_uuid)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    doc, permission = await get_document_with_permission(db, internal_id, user_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="Document not found")
     if permission == "viewer":
@@ -57,7 +63,7 @@ async def list_versions(
 
     query = (
         select(DocumentVersion)
-        .where(DocumentVersion.document_id == document_id)
+        .where(DocumentVersion.document_id == doc.id)
         .order_by(DocumentVersion.created_at.desc())
     )
 
@@ -102,13 +108,18 @@ async def list_versions(
     response_model=VersionDetailResponse,
 )
 async def get_version(
-    document_id: int,
+    document_id: str,
     version_number: int,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific version with its content. Owner and editor only."""
-    doc, permission = await get_document_with_permission(db, document_id, user_id)
+    doc_uuid = parse_document_uuid(document_id)
+    internal_id = await resolve_document_internal_id(db, doc_uuid)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    doc, permission = await get_document_with_permission(db, internal_id, user_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="Document not found")
     if permission == "viewer":
@@ -116,7 +127,7 @@ async def get_version(
 
     result = await db.execute(
         select(DocumentVersion).where(
-            DocumentVersion.document_id == document_id,
+            DocumentVersion.document_id == doc.id,
             DocumentVersion.version_number == version_number,
         )
     )
@@ -149,14 +160,19 @@ async def get_version(
     response_model=VersionDiffResponse,
 )
 async def get_version_diff(
-    document_id: int,
+    document_id: str,
     version_number: int,
     compare_to: int = Query(...),
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Get content of two versions for client-side diff rendering."""
-    doc, permission = await get_document_with_permission(db, document_id, user_id)
+    doc_uuid = parse_document_uuid(document_id)
+    internal_id = await resolve_document_internal_id(db, doc_uuid)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    doc, permission = await get_document_with_permission(db, internal_id, user_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="Document not found")
     if permission == "viewer":
@@ -165,7 +181,7 @@ async def get_version_diff(
     # Fetch both versions
     result = await db.execute(
         select(DocumentVersion).where(
-            DocumentVersion.document_id == document_id,
+            DocumentVersion.document_id == doc.id,
             DocumentVersion.version_number.in_([version_number, compare_to]),
         )
     )
@@ -193,27 +209,32 @@ async def get_version_diff(
 
 @router.post("/{document_id}/versions", response_model=CreateCheckpointResponse, status_code=201)
 async def create_checkpoint(
-    document_id: int,
+    document_id: str,
     body: CreateCheckpointRequest,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a manual checkpoint version with a label. Owner and editor only."""
-    doc, permission = await get_document_with_permission(db, document_id, user_id)
+    doc_uuid = parse_document_uuid(document_id)
+    internal_id = await resolve_document_internal_id(db, doc_uuid)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    doc, permission = await get_document_with_permission(db, internal_id, user_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="Document not found")
     if permission == "viewer":
         raise HTTPException(status_code=403, detail="Viewers cannot create checkpoints")
 
     new_version = await create_version(
-        db, document_id, doc.current_content, user_id, source="manual", label=body.label
+        db, doc.id, doc.current_content, user_id, source="manual", label=body.label
     )
     await db.commit()
 
     # Fetch the created version for response
     result = await db.execute(
         select(DocumentVersion).where(
-            DocumentVersion.document_id == document_id,
+            DocumentVersion.document_id == doc.id,
             DocumentVersion.version_number == new_version,
         )
     )
@@ -231,7 +252,7 @@ async def create_checkpoint(
 
 @router.post("/{document_id}/versions/{version_number}/restore", response_model=RestoreResponse)
 async def restore_version(
-    document_id: int,
+    document_id: str,
     version_number: int,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
@@ -244,7 +265,12 @@ async def restore_version(
     3. Replace document content with target version
     4. Create post-restore version
     """
-    doc, permission = await get_document_with_permission(db, document_id, user_id)
+    doc_uuid = parse_document_uuid(document_id)
+    internal_id = await resolve_document_internal_id(db, doc_uuid)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    doc, permission = await get_document_with_permission(db, internal_id, user_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="Document not found")
     if permission != "owner":
@@ -253,7 +279,7 @@ async def restore_version(
     # Fetch target version content
     target_result = await db.execute(
         select(DocumentVersion).where(
-            DocumentVersion.document_id == document_id,
+            DocumentVersion.document_id == doc.id,
             DocumentVersion.version_number == version_number,
         )
     )
@@ -271,7 +297,7 @@ async def restore_version(
     # Step 1: Save current content as pre-restore version
     pre_restore_version = await create_version(
         db,
-        document_id,
+        doc.id,
         doc.current_content,
         user_id,
         source="restore",
@@ -281,7 +307,7 @@ async def restore_version(
     # Step 2 & 3: Replace document content with target version
     post_restore_version = await create_version(
         db,
-        document_id,
+        doc.id,
         target_content,
         user_id,
         source="restore",
@@ -294,7 +320,7 @@ async def restore_version(
     user_result = await db.execute(select(User.display_name).where(User.id == user_id))
     display_name = user_result.scalar_one_or_none() or "Unknown"
     await notify_force_content(
-        document_id, target_content, display_name, post_restore_version
+        str(doc.public_id), target_content, display_name, post_restore_version
     )
 
     return RestoreResponse(

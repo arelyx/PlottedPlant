@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_current_user_id, get_db
+from app.dependencies import get_current_user_id, get_db, parse_document_uuid
 from app.models.document import Document
 from app.models.document_share import DocumentShare
 from app.models.folder import Folder
@@ -18,7 +18,11 @@ from app.schemas.share import (
     ShareUser,
     UpdateShareRequest,
 )
-from app.services.document import resolve_document_permission, resolve_folder_permission
+from app.services.document import (
+    resolve_document_internal_id,
+    resolve_document_permission,
+    resolve_folder_permission,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["sharing"])
 
@@ -51,34 +55,46 @@ def _build_public_link_response(link: PublicShareLink) -> PublicLinkResponse:
     )
 
 
+async def _resolve_document_for_shares(
+    db: AsyncSession, document_id: str, user_id: int
+) -> tuple[int, str]:
+    """Resolve UUID to internal ID and check owner permission. Returns (internal_id, permission)."""
+    doc_uuid = parse_document_uuid(document_id)
+    internal_id = await resolve_document_internal_id(db, doc_uuid)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    permission = await resolve_document_permission(db, internal_id, user_id)
+    if permission is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return internal_id, permission
+
+
 # ---------------------------------------------------------------------------
 # Document Shares
 # ---------------------------------------------------------------------------
 
 @router.get("/documents/{document_id}/shares", response_model=ShareListResponse)
 async def list_document_shares(
-    document_id: int,
+    document_id: str,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """List all shares for a document. Owner only."""
-    permission = await resolve_document_permission(db, document_id, user_id)
-    if permission is None:
-        raise HTTPException(status_code=404, detail="Document not found")
+    internal_id, permission = await _resolve_document_for_shares(db, document_id, user_id)
     if permission != "owner":
         raise HTTPException(
             status_code=403,
             detail={"code": "OWNER_ONLY", "message": "Only the owner can view shares."},
         )
 
-    result = await db.execute(select(Document).where(Document.id == document_id))
+    result = await db.execute(select(Document).where(Document.id == internal_id))
     doc = result.scalar_one()
 
     owner_user = await _get_share_user(db, doc.owner_id)
 
     # Get shares
     shares_result = await db.execute(
-        select(DocumentShare).where(DocumentShare.document_id == document_id)
+        select(DocumentShare).where(DocumentShare.document_id == internal_id)
     )
     shares = shares_result.scalars().all()
 
@@ -95,7 +111,7 @@ async def list_document_shares(
     # Get public link (active or inactive — permanent UUID)
     link_result = await db.execute(
         select(PublicShareLink).where(
-            PublicShareLink.document_id == document_id,
+            PublicShareLink.document_id == internal_id,
         )
     )
     link = link_result.scalar_one_or_none()
@@ -113,15 +129,13 @@ async def list_document_shares(
     status_code=201,
 )
 async def create_document_share(
-    document_id: int,
+    document_id: str,
     body: CreateShareRequest,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Share a document with a user. Owner only."""
-    permission = await resolve_document_permission(db, document_id, user_id)
-    if permission is None:
-        raise HTTPException(status_code=404, detail="Document not found")
+    internal_id, permission = await _resolve_document_for_shares(db, document_id, user_id)
     if permission != "owner":
         raise HTTPException(
             status_code=403,
@@ -144,7 +158,7 @@ async def create_document_share(
     # Check for existing share
     existing = await db.execute(
         select(DocumentShare).where(
-            DocumentShare.document_id == document_id,
+            DocumentShare.document_id == internal_id,
             DocumentShare.shared_with_id == body.user_id,
         )
     )
@@ -155,7 +169,7 @@ async def create_document_share(
         )
 
     share = DocumentShare(
-        document_id=document_id,
+        document_id=internal_id,
         shared_with_id=body.user_id,
         permission=body.permission,
         shared_by_id=user_id,
@@ -182,16 +196,14 @@ async def create_document_share(
 
 @router.patch("/documents/{document_id}/shares/{share_id}", response_model=ShareResponse)
 async def update_document_share(
-    document_id: int,
+    document_id: str,
     share_id: int,
     body: UpdateShareRequest,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Update a document share permission. Owner only."""
-    permission = await resolve_document_permission(db, document_id, user_id)
-    if permission is None:
-        raise HTTPException(status_code=404, detail="Document not found")
+    internal_id, permission = await _resolve_document_for_shares(db, document_id, user_id)
     if permission != "owner":
         raise HTTPException(
             status_code=403,
@@ -201,7 +213,7 @@ async def update_document_share(
     result = await db.execute(
         select(DocumentShare).where(
             DocumentShare.id == share_id,
-            DocumentShare.document_id == document_id,
+            DocumentShare.document_id == internal_id,
         )
     )
     share = result.scalar_one_or_none()
@@ -223,15 +235,13 @@ async def update_document_share(
 
 @router.delete("/documents/{document_id}/shares/{share_id}", status_code=204)
 async def delete_document_share(
-    document_id: int,
+    document_id: str,
     share_id: int,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Remove a document share. Owner only."""
-    permission = await resolve_document_permission(db, document_id, user_id)
-    if permission is None:
-        raise HTTPException(status_code=404, detail="Document not found")
+    internal_id, permission = await _resolve_document_for_shares(db, document_id, user_id)
     if permission != "owner":
         raise HTTPException(
             status_code=403,
@@ -241,7 +251,7 @@ async def delete_document_share(
     result = await db.execute(
         select(DocumentShare).where(
             DocumentShare.id == share_id,
-            DocumentShare.document_id == document_id,
+            DocumentShare.document_id == internal_id,
         )
     )
     share = result.scalar_one_or_none()
@@ -447,7 +457,7 @@ async def delete_folder_share(
 
 @router.post("/documents/{document_id}/public-link", response_model=PublicLinkResponse)
 async def create_document_public_link(
-    document_id: int,
+    document_id: str,
     body: CreatePublicLinkRequest,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
@@ -457,9 +467,7 @@ async def create_document_public_link(
     Each document has at most one permanent public link. If one exists
     (active or inactive), it is reactivated. Otherwise a new one is created.
     """
-    permission = await resolve_document_permission(db, document_id, user_id)
-    if permission is None:
-        raise HTTPException(status_code=404, detail="Document not found")
+    internal_id, permission = await _resolve_document_for_shares(db, document_id, user_id)
     if permission != "owner":
         raise HTTPException(
             status_code=403,
@@ -469,7 +477,7 @@ async def create_document_public_link(
     # Check for existing link (active or inactive)
     existing_result = await db.execute(
         select(PublicShareLink).where(
-            PublicShareLink.document_id == document_id,
+            PublicShareLink.document_id == internal_id,
         )
     )
     existing = existing_result.scalar_one_or_none()
@@ -482,7 +490,7 @@ async def create_document_public_link(
 
     # First time — create new permanent link
     link = PublicShareLink(
-        document_id=document_id,
+        document_id=internal_id,
         permission="viewer",
         created_by_id=user_id,
     )
@@ -494,14 +502,12 @@ async def create_document_public_link(
 
 @router.delete("/documents/{document_id}/public-link", status_code=204)
 async def revoke_document_public_link(
-    document_id: int,
+    document_id: str,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Deactivate the public link for a document. Owner only."""
-    permission = await resolve_document_permission(db, document_id, user_id)
-    if permission is None:
-        raise HTTPException(status_code=404, detail="Document not found")
+    internal_id, permission = await _resolve_document_for_shares(db, document_id, user_id)
     if permission != "owner":
         raise HTTPException(
             status_code=403,
@@ -510,7 +516,7 @@ async def revoke_document_public_link(
 
     result = await db.execute(
         select(PublicShareLink).where(
-            PublicShareLink.document_id == document_id,
+            PublicShareLink.document_id == internal_id,
         )
     )
     link = result.scalar_one_or_none()
@@ -558,7 +564,7 @@ async def access_public_link(
         "type": "document",
         "permission": "viewer",
         "document": {
-            "id": doc.id,
+            "id": str(doc.public_id),
             "title": doc.title,
             "content": doc.current_content,
             "owner": {"display_name": owner_name},

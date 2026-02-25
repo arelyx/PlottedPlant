@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_db, verify_internal_secret
+from app.dependencies import get_db, parse_document_uuid, verify_internal_secret
 from app.models.document import Document
 from app.models.user import User
 from fastapi.responses import JSONResponse
@@ -17,6 +17,7 @@ from app.schemas.internal import (
 from app.services.document import (
     compute_content_hash,
     create_version,
+    resolve_document_internal_id,
     resolve_document_permission,
 )
 from app.utils.security import decode_access_token
@@ -52,8 +53,13 @@ async def validate_auth(
     if user is None:
         return AuthValidateResponse(valid=False, reason="User not found")
 
-    # Check document permission
-    permission = await resolve_document_permission(db, body.document_id, user_id)
+    # Resolve UUID to internal ID, then check permission
+    doc_uuid = parse_document_uuid(body.document_id)
+    internal_id = await resolve_document_internal_id(db, doc_uuid)
+    if internal_id is None:
+        return AuthValidateResponse(valid=False, reason="No access to document")
+
+    permission = await resolve_document_permission(db, internal_id, user_id)
     if permission is None:
         return AuthValidateResponse(valid=False, reason="No access to document")
 
@@ -67,12 +73,13 @@ async def validate_auth(
 
 @router.get("/documents/{document_id}/content")
 async def get_document_content(
-    document_id: int,
+    document_id: str,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     """Return document plain text for Hocuspocus onLoadDocument."""
+    doc_uuid = parse_document_uuid(document_id)
     result = await db.execute(
-        select(Document.current_content).where(Document.id == document_id)
+        select(Document.current_content).where(Document.public_id == doc_uuid)
     )
     row = result.one_or_none()
     if row is None:
@@ -81,11 +88,12 @@ async def get_document_content(
 
 
 async def _sync_content(
-    db: AsyncSession, document_id: int, content: str, user_id: int | None, source: str
+    db: AsyncSession, document_id: str, content: str, user_id: int | None, source: str
 ) -> tuple[bool, int | None]:
     """Shared logic for sync and session-end: hash-compare, skip or create version."""
+    doc_uuid = parse_document_uuid(document_id)
     result = await db.execute(
-        select(Document).where(Document.id == document_id)
+        select(Document).where(Document.public_id == doc_uuid)
     )
     doc = result.scalar_one_or_none()
     if doc is None:
@@ -99,7 +107,7 @@ async def _sync_content(
     effective_user_id = user_id if user_id else doc.owner_id
 
     version_number = await create_version(
-        db, document_id, content, effective_user_id, source=source
+        db, doc.id, content, effective_user_id, source=source
     )
     await db.commit()
     return True, version_number
@@ -107,7 +115,7 @@ async def _sync_content(
 
 @router.post("/documents/{document_id}/sync")
 async def sync_document(
-    document_id: int,
+    document_id: str,
     body: SyncRequest,
     db: AsyncSession = Depends(get_db),
 ) -> SyncResponse:
@@ -120,7 +128,7 @@ async def sync_document(
 
 @router.post("/documents/{document_id}/session-end")
 async def session_end(
-    document_id: int,
+    document_id: str,
     body: SyncRequest,
     db: AsyncSession = Depends(get_db),
 ) -> SessionEndResponse:

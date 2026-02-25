@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.dependencies import get_current_user_id, get_db
-from app.services.document import get_document_with_permission
+from app.dependencies import get_current_user_id, get_db, parse_document_uuid
+from app.services.document import get_document_with_permission, resolve_document_internal_id
 
 logger = logging.getLogger(__name__)
 
@@ -37,16 +37,26 @@ async def _render_for_export(source: str, fmt: str) -> bytes:
     return response.content
 
 
+async def _get_doc_for_export(document_id: str, user_id: int, db):
+    """Resolve UUID and get document with permission check."""
+    doc_uuid = parse_document_uuid(document_id)
+    internal_id = await resolve_document_internal_id(db, doc_uuid)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    doc, permission = await get_document_with_permission(db, internal_id, user_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return doc
+
+
 @router.post("/{document_id}/export/svg")
 async def export_svg(
-    document_id: int,
+    document_id: str,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Export document as SVG file."""
-    doc, permission = await get_document_with_permission(db, document_id, user_id)
-    if doc is None:
-        raise HTTPException(status_code=404, detail="Document not found")
+    doc = await _get_doc_for_export(document_id, user_id, db)
 
     content = await _render_for_export(doc.current_content, "svg")
     filename = f"{_slugify(doc.title)}.svg"
@@ -60,14 +70,12 @@ async def export_svg(
 
 @router.post("/{document_id}/export/png")
 async def export_png(
-    document_id: int,
+    document_id: str,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Export document as PNG file."""
-    doc, permission = await get_document_with_permission(db, document_id, user_id)
-    if doc is None:
-        raise HTTPException(status_code=404, detail="Document not found")
+    doc = await _get_doc_for_export(document_id, user_id, db)
 
     content = await _render_for_export(doc.current_content, "png")
     filename = f"{_slugify(doc.title)}.png"
@@ -81,14 +89,12 @@ async def export_png(
 
 @router.post("/{document_id}/export/pdf")
 async def export_pdf(
-    document_id: int,
+    document_id: str,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Export document as PDF file."""
-    doc, permission = await get_document_with_permission(db, document_id, user_id)
-    if doc is None:
-        raise HTTPException(status_code=404, detail="Document not found")
+    doc = await _get_doc_for_export(document_id, user_id, db)
 
     content = await _render_for_export(doc.current_content, "pdf")
     filename = f"{_slugify(doc.title)}.pdf"
@@ -102,14 +108,12 @@ async def export_pdf(
 
 @router.post("/{document_id}/export/source")
 async def export_source(
-    document_id: int,
+    document_id: str,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Export document as PlantUML source file."""
-    doc, permission = await get_document_with_permission(db, document_id, user_id)
-    if doc is None:
-        raise HTTPException(status_code=404, detail="Document not found")
+    doc = await _get_doc_for_export(document_id, user_id, db)
 
     filename = f"{_slugify(doc.title)}.puml"
 

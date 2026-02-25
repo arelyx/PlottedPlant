@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 class AuthValidateRequest(BaseModel):
     token: str
-    document_id: int
+    document_id: str
 
 
 class AuthValidateResponse(BaseModel):

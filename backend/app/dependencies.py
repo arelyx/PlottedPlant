@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import AsyncGenerator
 
 import redis.asyncio as aioredis
@@ -77,3 +78,11 @@ async def verify_internal_secret(
     """Verify the X-Internal-Secret header for internal endpoints."""
     if x_internal_secret != settings.internal_secret:
         raise HTTPException(status_code=401, detail="Invalid internal secret")
+
+
+def parse_document_uuid(document_id: str) -> uuid.UUID:
+    """Parse a document UUID string, returning 404 if invalid."""
+    try:
+        return uuid.UUID(document_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Document not found")

@@ -5,7 +5,7 @@ from app.config import settings
 
 
 async def notify_force_content(
-    document_id: int,
+    document_id: str,
     content: str,
     restored_by: str,
     version_number: int,
@@ -34,7 +34,7 @@ async def notify_force_content(
     return False
 
 
-async def notify_close_room(document_id: int) -> bool:
+async def notify_close_room(document_id: str) -> bool:
     """Notify Hocuspocus to close all connections for a deleted document.
 
     Returns True if the room was active and connections were closed.
