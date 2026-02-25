@@ -63,13 +63,13 @@ export function DashboardPage() {
   const [renameFolderId, setRenameFolderId] = useState<number | null>(null);
   const [renameFolderName, setRenameFolderName] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<{ type: "folder" | "document"; id: number; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: "folder" | "document"; id: number | string; name: string } | null>(null);
   const [showMoveDoc, setShowMoveDoc] = useState(false);
-  const [moveDocId, setMoveDocId] = useState<number | null>(null);
+  const [moveDocId, setMoveDocId] = useState<string | null>(null);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [shareTarget, setShareTarget] = useState<{
     type: "document" | "folder";
-    id: number;
+    id: number | string;
     name: string;
   } | null>(null);
 
@@ -129,22 +129,22 @@ export function DashboardPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     if (deleteTarget.type === "folder") {
-      await deleteFolder(deleteTarget.id);
+      await deleteFolder(deleteTarget.id as number);
       if (activeFolderId === deleteTarget.id) setActiveFolderId(null);
     } else {
-      await deleteDocument(deleteTarget.id);
+      await deleteDocument(deleteTarget.id as string);
     }
     setShowDeleteConfirm(false);
     setDeleteTarget(null);
     refresh();
   };
 
-  const handleDuplicate = async (docId: number) => {
+  const handleDuplicate = async (docId: string) => {
     await duplicateDocument(docId);
     refresh();
   };
 
-  const handleMoveDocument = async (docId: number, folderId: number | null) => {
+  const handleMoveDocument = async (docId: string, folderId: number | null) => {
     await updateDocument(docId, { folder_id: folderId });
     setShowMoveDoc(false);
     setMoveDocId(null);
@@ -515,11 +515,11 @@ function DocumentList({
   onShare,
 }: {
   documents: DocumentItem[];
-  onOpen: (id: number) => void;
-  onDelete: (id: number, title: string) => void;
-  onDuplicate: (id: number) => void;
-  onMove: (id: number) => void;
-  onShare: (id: number, title: string) => void;
+  onOpen: (id: string) => void;
+  onDelete: (id: string, title: string) => void;
+  onDuplicate: (id: string) => void;
+  onMove: (id: string) => void;
+  onShare: (id: string, title: string) => void;
 }) {
   return (
     <div className="space-y-1">

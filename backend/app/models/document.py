@@ -1,6 +1,8 @@
+import uuid
 from datetime import datetime
 
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, LargeBinary, Text, func, text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models import Base
@@ -11,6 +13,9 @@ class Document(Base):
 
     id: Mapped[int] = mapped_column(
         BigInteger, primary_key=True, server_default=text("generated always as identity")
+    )
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()")
     )
     title: Mapped[str] = mapped_column(
         Text, nullable=False, server_default="Untitled Diagram"
@@ -55,4 +60,5 @@ class Document(Base):
     __table_args__ = (
         Index("idx_documents_owner", "owner_id"),
         Index("idx_documents_folder", "folder_id", postgresql_where=text("folder_id IS NOT NULL")),
+        Index("idx_documents_public_id", "public_id", unique=True),
     )

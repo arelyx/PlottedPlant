@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import BigInteger, Text, func, literal, literal_column, or_, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_current_user_id, get_db
+from app.dependencies import get_current_user_id, get_db, parse_document_uuid
 from app.models.document import Document
 from app.models.document_share import DocumentShare
 from app.services.collaboration import notify_close_room
@@ -26,6 +26,7 @@ from app.services.document import (
     get_document_with_permission,
     get_user_brief,
     is_document_shared,
+    resolve_document_internal_id,
     resolve_folder_permission,
 )
 
@@ -178,7 +179,7 @@ async def list_documents(
     items = []
     for doc, perm, shared_by_id in rows:
         items.append(DocumentListItem(
-            id=doc.id,
+            id=str(doc.public_id),
             title=doc.title,
             folder=folder_map.get(doc.folder_id) if doc.folder_id else None,
             permission=perm,
@@ -234,7 +235,7 @@ async def create_document(
     await db.refresh(doc)
 
     return DocumentCreateResponse(
-        id=doc.id,
+        id=str(doc.public_id),
         title=doc.title,
         folder=folder_info,
         permission="owner",
@@ -248,12 +249,17 @@ async def create_document(
 
 @router.get("/{document_id}", response_model=DocumentDetailResponse)
 async def get_document(
-    document_id: int,
+    document_id: str,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Get a single document's full details including content."""
-    doc, permission = await get_document_with_permission(db, document_id, user_id)
+    doc_uuid = parse_document_uuid(document_id)
+    internal_id = await resolve_document_internal_id(db, doc_uuid)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    doc, permission = await get_document_with_permission(db, internal_id, user_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -280,7 +286,7 @@ async def get_document(
     shared = await is_document_shared(db, doc.id)
 
     return DocumentDetailResponse(
-        id=doc.id,
+        id=str(doc.public_id),
         title=doc.title,
         folder=folder_info,
         permission=permission,
@@ -296,13 +302,18 @@ async def get_document(
 
 @router.patch("/{document_id}", response_model=DocumentDetailResponse)
 async def update_document(
-    document_id: int,
+    document_id: str,
     body: DocumentUpdateRequest,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Update document metadata (title, folder). Owner only."""
-    doc, permission = await get_document_with_permission(db, document_id, user_id)
+    doc_uuid = parse_document_uuid(document_id)
+    internal_id = await resolve_document_internal_id(db, doc_uuid)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    doc, permission = await get_document_with_permission(db, internal_id, user_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="Document not found")
     if permission != "owner":
@@ -330,12 +341,17 @@ async def update_document(
 
 @router.delete("/{document_id}", status_code=204)
 async def delete_document(
-    document_id: int,
+    document_id: str,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Permanently delete a document. Owner only."""
-    doc, permission = await get_document_with_permission(db, document_id, user_id)
+    doc_uuid = parse_document_uuid(document_id)
+    internal_id = await resolve_document_internal_id(db, doc_uuid)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    doc, permission = await get_document_with_permission(db, internal_id, user_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="Document not found")
     if permission != "owner":
@@ -345,7 +361,7 @@ async def delete_document(
         )
 
     # Notify Hocuspocus to close active connections before deleting
-    await notify_close_room(document_id)
+    await notify_close_room(str(doc.public_id))
 
     await db.delete(doc)
     await db.commit()
@@ -353,13 +369,18 @@ async def delete_document(
 
 @router.post("/{document_id}/duplicate", response_model=DocumentCreateResponse, status_code=201)
 async def duplicate_document(
-    document_id: int,
+    document_id: str,
     body: DocumentDuplicateRequest,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Duplicate a document to the authenticated user's workspace."""
-    doc, permission = await get_document_with_permission(db, document_id, user_id)
+    doc_uuid = parse_document_uuid(document_id)
+    internal_id = await resolve_document_internal_id(db, doc_uuid)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    doc, permission = await get_document_with_permission(db, internal_id, user_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -392,7 +413,7 @@ async def duplicate_document(
     await db.refresh(new_doc)
 
     return DocumentCreateResponse(
-        id=new_doc.id,
+        id=str(new_doc.public_id),
         title=new_doc.title,
         folder=folder_info,
         permission="owner",
@@ -406,13 +427,18 @@ async def duplicate_document(
 
 @router.put("/{document_id}/content", response_model=ContentUpdateResponse)
 async def update_content(
-    document_id: int,
+    document_id: str,
     body: DocumentContentUpdateRequest,
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Update document content directly via REST."""
-    doc, permission = await get_document_with_permission(db, document_id, user_id)
+    doc_uuid = parse_document_uuid(document_id)
+    internal_id = await resolve_document_internal_id(db, doc_uuid)
+    if internal_id is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    doc, permission = await get_document_with_permission(db, internal_id, user_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="Document not found")
     if permission == "viewer":
@@ -431,9 +457,9 @@ async def update_content(
             created_version=False,
         )
 
-    # Content changed — create new version
+    # Content changed — create new version (use internal BIGINT ID for FK)
     version_number = await create_version(
-        db, document_id, body.content, user_id, source="auto"
+        db, doc.id, body.content, user_id, source="auto"
     )
     await db.commit()
 

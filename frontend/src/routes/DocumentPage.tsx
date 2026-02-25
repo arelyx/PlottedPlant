@@ -89,9 +89,8 @@ async function checkSyntax(source: string): Promise<{ valid: boolean; error?: Re
 // --- Component ---
 
 export function DocumentPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id: documentId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const documentId = Number(id);
   const { preferences, resolvedTheme } = usePreferencesStore();
   const authUser = useAuthStore((s) => s.user);
 
@@ -155,7 +154,7 @@ export function DocumentPage() {
   }, [documentId]);
 
   useEffect(() => {
-    if (!isNaN(documentId)) loadDocument();
+    if (documentId) loadDocument();
   }, [documentId, loadDocument]);
 
   // --- Render pipeline ---
@@ -231,7 +230,7 @@ export function DocumentPage() {
 
   // --- Collaboration session ---
   useEffect(() => {
-    if (!doc || !authUser || isNaN(documentId)) return;
+    if (!doc || !authUser || !documentId) return;
 
     syncedRef.current = false;
 

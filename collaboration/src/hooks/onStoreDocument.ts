@@ -13,10 +13,9 @@ export async function onStoreDocument({
   document,
   documentName,
 }: onStoreDocumentPayload): Promise<void> {
-  const documentId = parseInt(documentName, 10);
   const meta = (document as any).meta as DocumentMeta | undefined;
   if (!meta) {
-    logger.warn(`No meta for document ${documentId}, skipping persist`);
+    logger.warn(`No meta for document ${documentName}, skipping persist`);
     return;
   }
 
@@ -26,7 +25,7 @@ export async function onStoreDocument({
 
   // Skip no-op writes
   if (currentHash === meta.last_persisted_hash) {
-    logger.debug(`Document ${documentId}: content unchanged, skipping persist`);
+    logger.debug(`Document ${documentName}: content unchanged, skipping persist`);
     if (meta.is_session_ending) {
       meta.is_session_ending = false;
     }
@@ -49,8 +48,8 @@ export async function onStoreDocument({
   // Determine endpoint based on session state
   const isSessionEnd = meta.is_session_ending;
   const endpoint = isSessionEnd
-    ? `/documents/${documentId}/session-end`
-    : `/documents/${documentId}/sync`;
+    ? `/documents/${documentName}/session-end`
+    : `/documents/${documentName}/sync`;
   const method = "POST";
 
   try {
@@ -68,14 +67,14 @@ export async function onStoreDocument({
 
     if (result.version_created) {
       logger.info(
-        `Document ${documentId}: ${isSessionEnd ? "session_end" : "auto"} version ${result.version_number} created`,
+        `Document ${documentName}: ${isSessionEnd ? "session_end" : "auto"} version ${result.version_number} created`,
       );
     } else {
-      logger.debug(`Document ${documentId}: persisted (no new version)`);
+      logger.debug(`Document ${documentName}: persisted (no new version)`);
     }
   } catch (err) {
     // On failure, hash is NOT updated → next cycle will retry
-    logger.error(`Failed to persist document ${documentId}:`, err);
+    logger.error(`Failed to persist document ${documentName}:`, err);
   }
 
   if (isSessionEnd) {

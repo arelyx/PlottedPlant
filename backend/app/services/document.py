@@ -1,4 +1,5 @@
 import hashlib
+import uuid
 from typing import Literal
 
 from sqlalchemy import func, select, update
@@ -15,6 +16,16 @@ from app.models.user import User
 
 
 PermissionLevel = Literal["owner", "editor", "viewer"]
+
+
+async def resolve_document_internal_id(
+    db: AsyncSession, public_id: uuid.UUID
+) -> int | None:
+    """Resolve a document's public UUID to its internal BIGINT ID."""
+    result = await db.execute(
+        select(Document.id).where(Document.public_id == public_id)
+    )
+    return result.scalar_one_or_none()
 
 
 async def resolve_document_permission(

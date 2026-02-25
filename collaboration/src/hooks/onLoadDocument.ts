@@ -20,17 +20,16 @@ export async function onLoadDocument({
   document,
   documentName,
 }: onLoadDocumentPayload): Promise<void> {
-  const documentId = parseInt(documentName, 10);
-  logger.info(`Loading document ${documentId} from database`);
+  logger.info(`Loading document ${documentName} from database`);
 
   let result: ContentResponse;
   try {
     result = await internalRequest<ContentResponse>(
-      `/documents/${documentId}/content`,
+      `/documents/${documentName}/content`,
       { timeoutMs: 10_000 },
     );
   } catch (err) {
-    logger.error(`Failed to load document ${documentId}:`, err);
+    logger.error(`Failed to load document ${documentName}:`, err);
     throw new Error("Failed to load document content");
   }
 
@@ -53,5 +52,5 @@ export async function onLoadDocument({
   };
   (document as any).meta = meta;
 
-  logger.info(`Document ${documentId} loaded (${plainText.length} chars)`);
+  logger.info(`Document ${documentName} loaded (${plainText.length} chars)`);
 }

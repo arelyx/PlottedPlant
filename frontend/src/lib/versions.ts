@@ -32,7 +32,7 @@ export interface RestoreResult {
 }
 
 export async function listVersions(
-  documentId: number,
+  documentId: string,
   cursor?: string,
   limit = 50
 ): Promise<{ items: VersionListItem[]; next_cursor: string | null; has_more: boolean }> {
@@ -44,14 +44,14 @@ export async function listVersions(
 }
 
 export async function getVersion(
-  documentId: number,
+  documentId: string,
   versionNumber: number
 ): Promise<VersionDetail> {
   return api.request(`/documents/${documentId}/versions/${versionNumber}`);
 }
 
 export async function getVersionDiff(
-  documentId: number,
+  documentId: string,
   versionNumber: number,
   compareTo: number
 ): Promise<VersionDiff> {
@@ -61,7 +61,7 @@ export async function getVersionDiff(
 }
 
 export async function createCheckpoint(
-  documentId: number,
+  documentId: string,
   label: string
 ): Promise<VersionListItem> {
   return api.request(`/documents/${documentId}/versions`, {
@@ -71,7 +71,7 @@ export async function createCheckpoint(
 }
 
 export async function restoreVersion(
-  documentId: number,
+  documentId: string,
   versionNumber: number
 ): Promise<RestoreResult> {
   return api.request(

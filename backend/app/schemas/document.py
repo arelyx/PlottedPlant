@@ -63,7 +63,7 @@ class DocumentDuplicateRequest(BaseModel):
 # --- Response schemas ---
 
 class DocumentListItem(BaseModel):
-    id: int
+    id: str
     title: str
     folder: FolderBrief | None = None
     permission: str
@@ -82,7 +82,7 @@ class DocumentListResponse(BaseModel):
 
 
 class DocumentDetailResponse(BaseModel):
-    id: int
+    id: str
     title: str
     folder: FolderBrief | None = None
     permission: str
@@ -96,7 +96,7 @@ class DocumentDetailResponse(BaseModel):
 
 
 class DocumentCreateResponse(BaseModel):
-    id: int
+    id: str
     title: str
     folder: FolderBrief | None = None
     permission: str

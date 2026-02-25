@@ -99,7 +99,7 @@ export interface CollaborationSession {
  * Connects to Hocuspocus, sets up Yjs Y.Doc, and prepares for Monaco binding.
  */
 export function createCollaborationSession(
-  documentId: number,
+  documentId: string,
   user: { id: number; name: string },
   permission: string,
   callbacks: {
@@ -124,7 +124,7 @@ export function createCollaborationSession(
 
   const provider = new HocuspocusProvider({
     url: wsUrl,
-    name: documentId.toString(),
+    name: documentId,
     document: ydoc,
     token: () => api.getAccessToken() || "",
     onStatus({ status }) {
