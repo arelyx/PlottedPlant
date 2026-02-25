@@ -191,12 +191,12 @@ export function TemplateBrowserPage() {
                 {previewTemplate.description}
               </p>
             </DialogHeader>
-            <div className="flex-1 overflow-auto grid grid-cols-1 md:grid-cols-2 gap-3 min-h-0">
-              <div className="border rounded-md bg-white p-4 overflow-auto flex items-start justify-center">
+            <div className="flex-1 overflow-auto space-y-3 min-h-0">
+              <div className="border rounded-md bg-white p-4 flex items-start justify-center">
                 <img
                   src={getTemplatePreviewUrl(previewTemplate.name)}
                   alt={`${previewTemplate.name} preview`}
-                  className="max-w-full h-auto"
+                  className="max-w-full h-auto max-h-64"
                 />
               </div>
               <div className="border rounded-md bg-muted/30 p-4 overflow-auto">
