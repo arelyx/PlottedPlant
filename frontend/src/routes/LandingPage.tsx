@@ -333,6 +333,12 @@ export function LandingPage() {
               {title}
             </button>
           )}
+          <Link
+            to="/templates"
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            Templates
+          </Link>
         </div>
 
         <div className="flex items-center gap-1">
