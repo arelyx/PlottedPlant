@@ -1,58 +1,35 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import Editor from "@monaco-editor/react";
+import Editor, { type OnMount } from "@monaco-editor/react";
+import type * as Monaco from "monaco-editor";
 import { registerPlantUMLLanguage } from "@/lib/plantuml-monaco";
 import {
-  Code2,
-  Eye,
-  Users,
-  Share2,
-  History,
-  Download,
-  ArrowRight,
-} from "lucide-react";
+  Panel,
+  Group as PanelGroup,
+  Separator as PanelResizeHandle,
+} from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/stores/auth";
+import { api } from "@/lib/api";
+import { PitchModal } from "@/components/PitchModal";
 
-const FEATURES = [
-  {
-    icon: Code2,
-    title: "Code Editor",
-    description:
-      "Full-featured Monaco editor with PlantUML syntax highlighting, autocomplete, and error markers.",
-  },
-  {
-    icon: Eye,
-    title: "Live Preview",
-    description:
-      "See your diagrams render instantly as you type. Split-pane view keeps code and preview side by side.",
-  },
-  {
-    icon: Users,
-    title: "Real-Time Collaboration",
-    description:
-      "Edit diagrams together with live cursors, selections, and presence indicators for every collaborator.",
-  },
-  {
-    icon: Share2,
-    title: "Sharing & Permissions",
-    description:
-      "Share documents with public links or invite specific users as viewers or editors.",
-  },
-  {
-    icon: History,
-    title: "Version History",
-    description:
-      "Every change is versioned automatically. Browse, compare, and restore any previous version.",
-  },
-  {
-    icon: Download,
-    title: "Export Anywhere",
-    description:
-      "Download your diagrams as high-resolution PNG, SVG, or PlantUML source files.",
-  },
-] as const;
+// --- Types ---
+
+interface RenderError {
+  message: string;
+  line?: number;
+}
+
+type ViewMode = "split" | "editor" | "preview";
+
+// --- Constants ---
 
 const SAMPLE_CODE = `@startuml
 actor User
@@ -67,6 +44,61 @@ database "PostgreSQL" as DB
     App --> User : Render editor
 @enduml`;
 
+// --- API helpers ---
+
+async function renderSvg(
+  source: string,
+): Promise<{ svg?: string; error?: RenderError }> {
+  try {
+    const response = await fetch("/api/v1/render/svg", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(api.getAccessToken()
+          ? { Authorization: `Bearer ${api.getAccessToken()}` }
+          : {}),
+      },
+      body: JSON.stringify({ source }),
+    });
+
+    if (response.status === 422) {
+      const data = await response.json();
+      return {
+        error: data.detail?.error || data.error || { message: "Syntax error" },
+      };
+    }
+
+    if (!response.ok) throw new Error("Render failed");
+    const svg = await response.text();
+    return { svg };
+  } catch {
+    return { error: { message: "Render request failed" } };
+  }
+}
+
+async function checkSyntax(
+  source: string,
+): Promise<{ valid: boolean; error?: RenderError }> {
+  try {
+    const response = await fetch("/api/v1/render/check", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(api.getAccessToken()
+          ? { Authorization: `Bearer ${api.getAccessToken()}` }
+          : {}),
+      },
+      body: JSON.stringify({ source }),
+    });
+    if (!response.ok) return { valid: true };
+    return await response.json();
+  } catch {
+    return { valid: true };
+  }
+}
+
+// --- Component ---
+
 export function LandingPage() {
   const { user, isInitialized, initialize } = useAuthStore();
 
@@ -74,30 +106,88 @@ export function LandingPage() {
     if (!isInitialized) initialize();
   }, [isInitialized, initialize]);
 
-  // Live render state
-  const [svgContent, setSvgContent] = useState<string | null>(null);
-  const [rendering, setRendering] = useState(false);
-  const renderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Title (local only, not persisted)
+  const [title, setTitle] = useState("Untitled Diagram");
+  const [editingTitle, setEditingTitle] = useState(false);
 
+  // Editor refs
+  const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
+  const monacoRef = useRef<typeof Monaco | null>(null);
+  const contentRef = useRef(SAMPLE_CODE);
+
+  // Render state
+  const [svgContent, setSvgContent] = useState<string | null>(null);
+  const [lastGoodSvg, setLastGoodSvg] = useState<string | null>(null);
+  const [renderError, setRenderError] = useState<RenderError | null>(null);
+  const [rendering, setRendering] = useState(false);
+  const [renderTime, setRenderTime] = useState<number | null>(null);
+  const renderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const renderAbortRef = useRef<AbortController | null>(null);
+
+  // View controls
+  const [viewMode, setViewMode] = useState<ViewMode>("split");
+  const [zoom, setZoom] = useState(100);
+  const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
+  const [lineCount, setLineCount] = useState(SAMPLE_CODE.split("\n").length);
+
+  // Pitch modal
+  const [showPitch, setShowPitch] = useState(false);
+
+  // --- Render pipeline ---
   const triggerRender = useCallback((source: string) => {
     if (renderTimeoutRef.current) clearTimeout(renderTimeoutRef.current);
+    if (renderAbortRef.current) renderAbortRef.current.abort();
+
     renderTimeoutRef.current = setTimeout(async () => {
+      const abortController = new AbortController();
+      renderAbortRef.current = abortController;
       setRendering(true);
-      try {
-        const res = await fetch("/api/v1/render/svg", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ source }),
-        });
-        if (res.ok) setSvgContent(await res.text());
-      } catch {
-        // silently fail — preview just won't update
-      }
+      const start = performance.now();
+
+      const [renderResult, checkResult] = await Promise.all([
+        renderSvg(source),
+        checkSyntax(source),
+      ]);
+
+      if (abortController.signal.aborted) return;
+
+      const elapsed = Math.round(performance.now() - start);
+      setRenderTime(elapsed);
       setRendering(false);
+
+      if (renderResult.svg) {
+        setSvgContent(renderResult.svg);
+        setLastGoodSvg(renderResult.svg);
+        setRenderError(null);
+      } else if (renderResult.error) {
+        setRenderError(renderResult.error);
+      }
+
+      // Set Monaco error markers
+      if (monacoRef.current && editorRef.current) {
+        const model = editorRef.current.getModel();
+        if (model) {
+          if (!checkResult.valid && checkResult.error) {
+            const errorLine = checkResult.error.line || 1;
+            monacoRef.current.editor.setModelMarkers(model, "plantuml", [
+              {
+                severity: monacoRef.current.MarkerSeverity.Error,
+                message: checkResult.error.message,
+                startLineNumber: errorLine,
+                startColumn: 1,
+                endLineNumber: errorLine,
+                endColumn: model.getLineMaxColumn(errorLine),
+              },
+            ]);
+          } else {
+            monacoRef.current.editor.setModelMarkers(model, "plantuml", []);
+          }
+        }
+      }
     }, 400);
   }, []);
 
-  // Render the sample code on mount
+  // Initial render
   useEffect(() => {
     triggerRender(SAMPLE_CODE);
     return () => {
@@ -105,18 +195,171 @@ export function LandingPage() {
     };
   }, [triggerRender]);
 
-  const ctaPath = user ? "/dashboard" : "/register";
-  const ctaLabel = user ? "Go to Dashboard" : "Get Started";
+  // Warn before navigating away with unsaved changes
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (contentRef.current !== SAMPLE_CODE) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
+
+  // --- Monaco setup ---
+  const handleEditorMount: OnMount = (editor, monaco) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
+    registerPlantUMLLanguage(monaco);
+
+    editor.onDidChangeCursorPosition((e) => {
+      setCursorPosition({
+        line: e.position.lineNumber,
+        column: e.position.column,
+      });
+    });
+  };
+
+  // --- Export ---
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const exportFilename = title.trim() || "diagram";
+
+  const handleExportSvg = () => {
+    const svg = svgContent || lastGoodSvg;
+    if (!svg) return;
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    downloadBlob(blob, `${exportFilename}.svg`);
+  };
+
+  const handleExportPng = async () => {
+    const source = contentRef.current;
+    if (!source) return;
+    try {
+      const response = await fetch("/api/v1/render/png", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(api.getAccessToken()
+            ? { Authorization: `Bearer ${api.getAccessToken()}` }
+            : {}),
+        },
+        body: JSON.stringify({ source }),
+      });
+      if (!response.ok) return;
+      const blob = await response.blob();
+      downloadBlob(blob, `${exportFilename}.png`);
+    } catch {
+      // silently fail
+    }
+  };
+
+  const handleExportSource = () => {
+    const source = contentRef.current;
+    if (!source) return;
+    const blob = new Blob([source], { type: "text/plain;charset=utf-8" });
+    downloadBlob(blob, `${exportFilename}.puml`);
+  };
 
   return (
-    <div className="dark min-h-screen bg-background text-foreground">
-      {/* Navigation */}
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-          <Link to="/" className="text-lg font-semibold">
+    <div className="dark flex flex-col h-screen bg-background text-foreground">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between px-3 py-1.5 border-b bg-background shrink-0">
+        <div className="flex items-center gap-2">
+          <Link to="/" className="text-sm font-bold hover:opacity-80">
             PlottedPlant
           </Link>
-          <nav className="flex items-center gap-2">
+          <span className="text-muted-foreground">/</span>
+          {editingTitle ? (
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={() => setEditingTitle(false)}
+              onKeyDown={(e) => e.key === "Enter" && setEditingTitle(false)}
+              className="h-7 w-64 text-sm"
+              autoFocus
+            />
+          ) : (
+            <button
+              className="text-sm font-medium hover:underline"
+              onClick={() => setEditingTitle(true)}
+            >
+              {title}
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1">
+          {/* View mode toggle */}
+          <div className="flex border rounded-md">
+            <button
+              className={`px-2 py-1 text-xs ${viewMode === "editor" ? "bg-accent" : ""}`}
+              onClick={() => setViewMode("editor")}
+              title="Editor only"
+            >
+              Code
+            </button>
+            <button
+              className={`px-2 py-1 text-xs border-x ${viewMode === "split" ? "bg-accent" : ""}`}
+              onClick={() => setViewMode("split")}
+              title="Split view"
+            >
+              Split
+            </button>
+            <button
+              className={`px-2 py-1 text-xs ${viewMode === "preview" ? "bg-accent" : ""}`}
+              onClick={() => setViewMode("preview")}
+              title="Preview only"
+            >
+              Preview
+            </button>
+          </div>
+
+          {/* Export */}
+          <DropdownMenu>
+            <DropdownMenuTrigger className="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium rounded-md px-3 h-8 hover:bg-accent hover:text-accent-foreground">
+              Export
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={handleExportSvg}
+                disabled={!svgContent && !lastGoodSvg}
+              >
+                Download SVG
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportPng}>
+                Download PNG
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportSource}>
+                Download Source (.puml)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Share & History → pitch modal */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowPitch(true)}
+          >
+            Share
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowPitch(true)}
+          >
+            History
+          </Button>
+
+          {/* Auth links */}
+          <div className="ml-1 border-l pl-2 flex items-center gap-1">
             {user ? (
               <Button asChild size="sm">
                 <Link to="/dashboard">Dashboard</Link>
@@ -127,140 +370,151 @@ export function LandingPage() {
                   <Link to="/login">Sign in</Link>
                 </Button>
                 <Button asChild size="sm">
-                  <Link to="/register">Get Started</Link>
+                  <Link to="/register">Create account</Link>
                 </Button>
               </>
             )}
-          </nav>
-        </div>
-      </header>
-
-      {/* Hero */}
-      <section className="mx-auto max-w-6xl px-4 py-20 text-center md:py-28">
-        <h1 className="mx-auto max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
-          Create UML Diagrams{" "}
-          <span className="text-muted-foreground">Together</span>
-        </h1>
-        <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
-          A simple, powerful online IDE for PlantUML. Write diagram code with
-          live preview, collaborate in real time, and share with anyone.
-        </p>
-        <div className="mt-8 flex items-center justify-center gap-3">
-          <Button asChild size="lg">
-            <Link to={ctaPath}>
-              {ctaLabel}
-              <ArrowRight className="ml-1 size-4" />
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="lg">
-            <Link to="/templates">View Templates</Link>
-          </Button>
-        </div>
-
-        {/* Live editor */}
-        <div className="mx-auto mt-14 max-w-5xl overflow-hidden rounded-lg border bg-background shadow-lg text-left">
-          <div className="flex items-center justify-between border-b px-4 py-2">
-            <span className="text-xs text-muted-foreground">
-              Try it — edit the code below
-            </span>
-            {rendering && (
-              <span className="text-xs text-muted-foreground">
-                Rendering...
-              </span>
-            )}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2">
-            {/* Code pane */}
-            <div className="h-[380px] border-b md:border-b-0 md:border-r">
-              <Editor
-                height="100%"
-                defaultValue={SAMPLE_CODE}
-                language="plantuml"
-                theme="vs-dark"
-                onMount={(_editor, monaco) => registerPlantUMLLanguage(monaco)}
-                onChange={(val) => {
-                  if (val !== undefined) triggerRender(val);
-                }}
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 13,
-                  lineNumbers: "on",
-                  scrollBeyondLastLine: false,
-                  automaticLayout: true,
-                  padding: { top: 8 },
-                  wordWrap: "on",
-                }}
-              />
-            </div>
-            {/* Preview pane */}
-            <div className="h-[380px] overflow-auto bg-white p-4">
-              {svgContent ? (
-                <div dangerouslySetInnerHTML={{ __html: svgContent }} />
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-neutral-400">
-                  {rendering ? "Rendering..." : "Preview will appear here"}
-                </div>
+        </div>
+      </div>
+
+      {/* Editor + Preview */}
+      <div className="flex-1 overflow-hidden">
+        <PanelGroup direction="horizontal">
+          {viewMode !== "preview" && (
+            <>
+              <Panel defaultSize={50} minSize={20}>
+                <Editor
+                  height="100%"
+                  defaultValue={SAMPLE_CODE}
+                  language="plantuml"
+                  theme="vs-dark"
+                  onMount={handleEditorMount}
+                  onChange={(val) => {
+                    if (val !== undefined) {
+                      contentRef.current = val;
+                      setLineCount(val.split("\n").length);
+                      triggerRender(val);
+                    }
+                  }}
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 14,
+                    lineNumbers: "on",
+                    wordWrap: "on",
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true,
+                    tabSize: 2,
+                    renderLineHighlight: "line",
+                    bracketPairColorization: { enabled: true },
+                    padding: { top: 8 },
+                  }}
+                />
+              </Panel>
+              {viewMode === "split" && (
+                <PanelResizeHandle className="w-1.5 bg-border hover:bg-primary/20 transition-colors" />
               )}
-            </div>
-          </div>
-        </div>
-      </section>
+            </>
+          )}
+          {viewMode !== "editor" && (
+            <Panel defaultSize={50} minSize={20}>
+              <div className="h-full flex flex-col bg-muted/30">
+                {/* Preview toolbar */}
+                <div className="flex items-center gap-1 px-2 py-1 border-b text-xs">
+                  <button
+                    className="px-2 py-0.5 rounded hover:bg-accent"
+                    onClick={() => setZoom((z) => Math.min(z + 25, 400))}
+                  >
+                    +
+                  </button>
+                  <span className="min-w-[3rem] text-center">{zoom}%</span>
+                  <button
+                    className="px-2 py-0.5 rounded hover:bg-accent"
+                    onClick={() => setZoom((z) => Math.max(z - 25, 25))}
+                  >
+                    -
+                  </button>
+                  <button
+                    className="px-2 py-0.5 rounded hover:bg-accent ml-1"
+                    onClick={() => setZoom(100)}
+                  >
+                    Reset
+                  </button>
+                  {rendering && (
+                    <span className="ml-auto text-muted-foreground">
+                      Rendering...
+                    </span>
+                  )}
+                </div>
 
-      <Separator />
-
-      {/* Features */}
-      <section className="mx-auto max-w-6xl px-4 py-20 md:py-24">
-        <div className="text-center">
-          <h2 className="text-3xl font-bold tracking-tight">
-            Everything you need to diagram
-          </h2>
-          <p className="mt-3 text-muted-foreground">
-            A complete toolkit for creating, sharing, and collaborating on
-            PlantUML diagrams.
-          </p>
-        </div>
-        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map((feature) => (
-            <div
-              key={feature.title}
-              className="rounded-lg border bg-background p-6 transition-colors hover:bg-muted/50"
-            >
-              <div className="mb-3 flex size-10 items-center justify-center rounded-md bg-muted">
-                <feature.icon className="size-5 text-foreground" />
+                {/* Preview content */}
+                <div className="flex-1 overflow-auto p-4">
+                  {renderError && !lastGoodSvg ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center text-muted-foreground">
+                        <p className="text-sm font-medium text-destructive mb-1">
+                          {renderError.message}
+                        </p>
+                        {renderError.line && (
+                          <p className="text-xs">
+                            Error on line {renderError.line}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="relative min-h-full">
+                      {renderError && lastGoodSvg && (
+                        <div className="absolute top-2 left-2 right-2 z-10 bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2 text-xs">
+                          <span className="text-destructive font-medium">
+                            {renderError.message}
+                          </span>
+                          {renderError.line && (
+                            <span className="text-muted-foreground ml-2">
+                              Line {renderError.line}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <div
+                        className={`inline-block transition-opacity ${renderError ? "opacity-40" : ""}`}
+                        style={{
+                          transform: `scale(${zoom / 100})`,
+                          transformOrigin: "top left",
+                        }}
+                        dangerouslySetInnerHTML={{
+                          __html: svgContent || lastGoodSvg || "",
+                        }}
+                      />
+                      {!svgContent && !lastGoodSvg && !rendering && (
+                        <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                          Write some PlantUML to see a preview
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-              <h3 className="font-semibold">{feature.title}</h3>
-              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                {feature.description}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
+            </Panel>
+          )}
+        </PanelGroup>
+      </div>
 
-      <Separator />
+      {/* Status bar */}
+      <div className="flex items-center gap-4 px-3 py-1 border-t text-xs text-muted-foreground bg-background shrink-0">
+        <span>
+          Ln {cursorPosition.line}, Col {cursorPosition.column}
+        </span>
+        <span>{lineCount} lines</span>
+        {renderTime !== null && (
+          <span>
+            {rendering ? "Rendering..." : `Rendered in ${renderTime}ms`}
+          </span>
+        )}
+      </div>
 
-      {/* Final CTA */}
-      <section className="mx-auto max-w-6xl px-4 py-20 text-center md:py-24">
-        <h2 className="text-3xl font-bold tracking-tight">
-          Ready to start diagramming?
-        </h2>
-        <p className="mt-3 text-muted-foreground">
-          Create your first diagram in seconds.
-        </p>
-        <div className="mt-8">
-          <Button asChild size="lg">
-            <Link to={ctaPath}>
-              {user ? "Go to Dashboard" : "Create Free Account"}
-              <ArrowRight className="ml-1 size-4" />
-            </Link>
-          </Button>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t py-8 text-center text-sm text-muted-foreground">
-        PlottedPlant
-      </footer>
+      {/* Pitch Modal */}
+      <PitchModal open={showPitch} onOpenChange={setShowPitch} />
     </div>
   );
 }
