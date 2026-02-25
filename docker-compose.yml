@@ -7,7 +7,7 @@ services:
   # NGINX — Reverse Proxy & TLS Termination
   # ─────────────────────────────────────────────
   nginx:
-    image: nginx:1.27-alpine
+    image: nginx:1.28.2-alpine
     container_name: plantuml-nginx
     restart: unless-stopped
     ports:
@@ -121,12 +121,12 @@ services:
   # PLANTUML — Diagram Rendering Engine
   # ─────────────────────────────────────────────
   plantuml:
-    image: plantuml/plantuml-server:jetty-v1.2024.8
+    image: plantuml/plantuml-server:jetty-v1.2026.1
     container_name: plantuml-renderer
     restart: unless-stopped
     environment:
       - PLANTUML_LIMIT_SIZE=16384
-      - ALLOW_PLANTUML_INCLUDE=false
+      - PLANTUML_SECURITY_PROFILE=INTERNET
     networks:
       - backend_net
     healthcheck:
@@ -147,7 +147,7 @@ services:
   # POSTGRESQL — Primary Data Store
   # ─────────────────────────────────────────────
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18.2-alpine
     container_name: plantuml-postgres
     restart: unless-stopped
     environment:
@@ -180,7 +180,7 @@ services:
   # REDIS — Cache & Rate Limiting
   # ─────────────────────────────────────────────
   redis:
-    image: redis:7-alpine
+    image: redis:8.6.1-alpine
     container_name: plantuml-redis
     restart: unless-stopped
     command: >
