@@ -171,6 +171,14 @@ export function LandingPage() {
   // Pitch modal
   const [showPitch, setShowPitch] = useState(false);
 
+  // Force dark mode on document root so portalled elements (dropdowns, dialogs) inherit it
+  useEffect(() => {
+    document.documentElement.classList.add("dark");
+    return () => {
+      document.documentElement.classList.remove("dark");
+    };
+  }, []);
+
   // --- Render pipeline ---
   const triggerRender = useCallback((source: string) => {
     if (renderTimeoutRef.current) clearTimeout(renderTimeoutRef.current);

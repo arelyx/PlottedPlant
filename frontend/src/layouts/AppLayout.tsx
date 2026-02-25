@@ -54,7 +54,7 @@ export function AppLayout() {
       <header className="border-b">
         <div className="flex h-14 items-center justify-between px-4">
           <div className="flex items-center gap-4">
-            <Link to="/dashboard" className="text-lg font-semibold">
+            <Link to={user ? "/dashboard" : "/"} className="text-lg font-semibold">
               PlottedPlant
             </Link>
             <nav className="flex items-center gap-2">
