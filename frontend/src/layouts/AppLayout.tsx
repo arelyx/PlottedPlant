@@ -5,10 +5,14 @@ import { usePreferencesStore } from "@/stores/preferences";
 import { Button } from "@/components/ui/button";
 
 export function AppLayout() {
-  const { user, logout } = useAuthStore();
+  const { user, logout, isInitialized, initialize } = useAuthStore();
   const { preferences, isLoaded, resolvedTheme, load, update } =
     usePreferencesStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isInitialized) initialize();
+  }, [isInitialized, initialize]);
 
   useEffect(() => {
     if (!isLoaded) load();
@@ -72,7 +76,7 @@ export function AppLayout() {
             <Button variant="ghost" size="sm" onClick={cycleTheme} title={`Theme: ${preferences.theme}`}>
               {themeIcon}
             </Button>
-            {user && (
+            {user ? (
               <>
                 <span className="text-sm text-muted-foreground">
                   {user.display_name}
@@ -84,6 +88,20 @@ export function AppLayout() {
                   Sign out
                 </button>
               </>
+            ) : (
+              isInitialized && (
+                <>
+                  <Link
+                    to="/login"
+                    className="text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    Sign in
+                  </Link>
+                  <Link to="/register">
+                    <Button size="sm">Create account</Button>
+                  </Link>
+                </>
+              )
             )}
           </div>
         </div>

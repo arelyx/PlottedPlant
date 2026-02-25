@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_current_user_id, get_db
+from app.dependencies import get_db
 from app.models.template import Template
 from app.schemas.template import TemplateDetail, TemplateListItem, TemplateListResponse
 
@@ -12,7 +12,6 @@ router = APIRouter(prefix="/api/v1/templates", tags=["templates"])
 @router.get("", response_model=TemplateListResponse)
 async def list_templates(
     diagram_type: str | None = Query(None),
-    _user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """List all templates, optionally filtered by diagram type."""
@@ -45,7 +44,6 @@ async def list_templates(
 @router.get("/{template_id}", response_model=TemplateDetail)
 async def get_template(
     template_id: int,
-    _user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Get a single template with its content."""

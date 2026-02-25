@@ -17,6 +17,8 @@ import {
   type TemplateDetail,
 } from "@/lib/templates";
 import { createDocument, listFolders, type FolderItem } from "@/lib/documents";
+import { useAuthStore } from "@/stores/auth";
+import { PitchModal } from "@/components/PitchModal";
 
 const DIAGRAM_TYPES = [
   { value: "", label: "All" },
@@ -37,6 +39,7 @@ const DIAGRAM_TYPES = [
 
 export function TemplateBrowserPage() {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const [templates, setTemplates] = useState<TemplateListItem[]>([]);
   const [activeType, setActiveType] = useState("");
   const [loading, setLoading] = useState(true);
@@ -47,6 +50,7 @@ export function TemplateBrowserPage() {
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
+  const [showPitch, setShowPitch] = useState(false);
 
   const loadTemplates = useCallback(async () => {
     setLoading(true);
@@ -65,8 +69,8 @@ export function TemplateBrowserPage() {
   }, [loadTemplates]);
 
   useEffect(() => {
-    listFolders().then((res) => setFolders(res.items));
-  }, []);
+    if (user) listFolders().then((res) => setFolders(res.items));
+  }, [user]);
 
   const handlePreview = async (template: TemplateListItem) => {
     setLoadingPreview(true);
@@ -81,6 +85,10 @@ export function TemplateBrowserPage() {
   };
 
   const handleUseTemplate = async (content: string, name: string) => {
+    if (!user) {
+      setShowPitch(true);
+      return;
+    }
     if (creating) return;
     setCreating(true);
     try {
@@ -206,27 +214,29 @@ export function TemplateBrowserPage() {
               </div>
             </div>
             <DialogFooter className="flex items-center gap-2">
-              <div className="flex items-center gap-2 mr-auto">
-                <label className="text-sm text-muted-foreground">
-                  Create in:
-                </label>
-                <select
-                  className="text-sm border rounded px-2 py-1 bg-background"
-                  value={selectedFolder ?? ""}
-                  onChange={(e) =>
-                    setSelectedFolder(
-                      e.target.value ? Number(e.target.value) : null
-                    )
-                  }
-                >
-                  <option value="">No folder</option>
-                  {folders.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {user && (
+                <div className="flex items-center gap-2 mr-auto">
+                  <label className="text-sm text-muted-foreground">
+                    Create in:
+                  </label>
+                  <select
+                    className="text-sm border rounded px-2 py-1 bg-background"
+                    value={selectedFolder ?? ""}
+                    onChange={(e) =>
+                      setSelectedFolder(
+                        e.target.value ? Number(e.target.value) : null
+                      )
+                    }
+                  >
+                    <option value="">No folder</option>
+                    {folders.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <Button
                 variant="outline"
                 onClick={() => setPreviewTemplate(null)}
@@ -248,6 +258,8 @@ export function TemplateBrowserPage() {
           </DialogContent>
         )}
       </Dialog>
+
+      <PitchModal open={showPitch} onOpenChange={setShowPitch} />
     </div>
   );
 }
