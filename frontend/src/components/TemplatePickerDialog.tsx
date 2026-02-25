@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   listTemplates,
   getTemplate,
+  getTemplatePreviewUrl,
   type TemplateListItem,
 } from "@/lib/templates";
 
@@ -93,21 +94,30 @@ export function TemplatePickerDialog({
                   {items.map((t) => (
                     <button
                       key={t.id}
-                      className="text-left p-3 border rounded-lg hover:border-primary/50 hover:bg-accent/30 transition-colors disabled:opacity-50"
+                      className="text-left border rounded-lg overflow-hidden hover:border-primary/50 hover:bg-accent/30 transition-colors disabled:opacity-50"
                       onClick={() => handleSelectTemplate(t)}
                       disabled={loadingId !== null}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="font-medium text-sm">{t.name}</p>
-                        {loadingId === t.id && (
-                          <Badge variant="secondary" className="text-xs">
-                            Loading...
-                          </Badge>
-                        )}
+                      <div className="h-24 bg-white p-2 border-b flex items-center justify-center overflow-hidden">
+                        <img
+                          src={getTemplatePreviewUrl(t.name)}
+                          alt={`${t.name} preview`}
+                          className="max-h-full max-w-full object-contain"
+                        />
                       </div>
-                      <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
-                        {t.description}
-                      </p>
+                      <div className="p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium text-sm">{t.name}</p>
+                          {loadingId === t.id && (
+                            <Badge variant="secondary" className="text-xs">
+                              Loading...
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                          {t.description}
+                        </p>
+                      </div>
                     </button>
                   ))}
                 </div>

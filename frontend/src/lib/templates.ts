@@ -22,3 +22,17 @@ export async function listTemplates(
 export async function getTemplate(id: number): Promise<TemplateDetail> {
   return api.request(`/templates/${id}`);
 }
+
+/**
+ * Get the URL for a template's pre-rendered SVG preview.
+ * SVGs are static assets in /templates/ named as kebab-case of the template name.
+ */
+export function getTemplatePreviewUrl(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/\(|\)/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/-$/, "");
+  return `/templates/${slug}.svg`;
+}

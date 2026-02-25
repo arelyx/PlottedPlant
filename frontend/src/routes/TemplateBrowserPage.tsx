@@ -12,6 +12,7 @@ import {
 import {
   listTemplates,
   getTemplate,
+  getTemplatePreviewUrl,
   type TemplateListItem,
   type TemplateDetail,
 } from "@/lib/templates";
@@ -190,10 +191,12 @@ export function TemplateBrowserPage() {
                 {previewTemplate.description}
               </p>
             </DialogHeader>
-            <div className="flex-1 overflow-auto border rounded-md bg-muted/30 p-4">
-              <pre className="text-sm font-mono whitespace-pre-wrap">
-                {previewTemplate.content}
-              </pre>
+            <div className="flex-1 overflow-auto border rounded-md bg-white p-4">
+              <img
+                src={getTemplatePreviewUrl(previewTemplate.name)}
+                alt={`${previewTemplate.name} preview`}
+                className="max-w-full h-auto mx-auto"
+              />
             </div>
             <DialogFooter className="flex items-center gap-2">
               <div className="flex items-center gap-2 mr-auto">
@@ -253,18 +256,27 @@ function TemplateCard({
 }) {
   return (
     <div
-      className="border rounded-lg p-4 hover:border-primary/50 hover:shadow-sm cursor-pointer transition-colors"
+      className="border rounded-lg overflow-hidden hover:border-primary/50 hover:shadow-sm cursor-pointer transition-colors"
       onClick={onPreview}
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <h3 className="font-medium text-sm">{template.name}</h3>
-        <Badge variant="secondary" className="text-xs shrink-0 capitalize">
-          {template.diagram_type.replace(/_/g, " ")}
-        </Badge>
+      <div className="h-36 bg-white p-3 border-b flex items-center justify-center overflow-hidden">
+        <img
+          src={getTemplatePreviewUrl(template.name)}
+          alt={`${template.name} preview`}
+          className="max-h-full max-w-full object-contain"
+        />
       </div>
-      <p className="text-xs text-muted-foreground line-clamp-2">
-        {template.description}
-      </p>
+      <div className="p-3">
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <h3 className="font-medium text-sm">{template.name}</h3>
+          <Badge variant="secondary" className="text-xs shrink-0 capitalize">
+            {template.diagram_type.replace(/_/g, " ")}
+          </Badge>
+        </div>
+        <p className="text-xs text-muted-foreground line-clamp-2">
+          {template.description}
+        </p>
+      </div>
     </div>
   );
 }
