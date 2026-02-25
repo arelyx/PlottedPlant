@@ -97,6 +97,43 @@ async function checkSyntax(
   }
 }
 
+// --- localStorage persistence ---
+
+const LS_CONTENT_KEY = "plottedplant:scratch:content";
+const LS_TITLE_KEY = "plottedplant:scratch:title";
+
+function loadSavedContent(): string {
+  try {
+    return localStorage.getItem(LS_CONTENT_KEY) ?? SAMPLE_CODE;
+  } catch {
+    return SAMPLE_CODE;
+  }
+}
+
+function loadSavedTitle(): string {
+  try {
+    return localStorage.getItem(LS_TITLE_KEY) ?? "Untitled Diagram";
+  } catch {
+    return "Untitled Diagram";
+  }
+}
+
+function saveContent(content: string) {
+  try {
+    localStorage.setItem(LS_CONTENT_KEY, content);
+  } catch {
+    // Storage full or unavailable — silently ignore
+  }
+}
+
+function saveTitle(title: string) {
+  try {
+    localStorage.setItem(LS_TITLE_KEY, title);
+  } catch {
+    // silently ignore
+  }
+}
+
 // --- Component ---
 
 export function LandingPage() {
@@ -106,14 +143,15 @@ export function LandingPage() {
     if (!isInitialized) initialize();
   }, [isInitialized, initialize]);
 
-  // Title (local only, not persisted)
-  const [title, setTitle] = useState("Untitled Diagram");
+  // Title (persisted to localStorage)
+  const [title, setTitle] = useState(loadSavedTitle);
   const [editingTitle, setEditingTitle] = useState(false);
 
   // Editor refs
+  const initialContent = useRef(loadSavedContent()).current;
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
-  const contentRef = useRef(SAMPLE_CODE);
+  const contentRef = useRef(initialContent);
 
   // Render state
   const [svgContent, setSvgContent] = useState<string | null>(null);
@@ -128,7 +166,7 @@ export function LandingPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("split");
   const [zoom, setZoom] = useState(100);
   const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
-  const [lineCount, setLineCount] = useState(SAMPLE_CODE.split("\n").length);
+  const [lineCount, setLineCount] = useState(initialContent.split("\n").length);
 
   // Pitch modal
   const [showPitch, setShowPitch] = useState(false);
@@ -187,24 +225,18 @@ export function LandingPage() {
     }, 400);
   }, []);
 
-  // Initial render
+  // Initial render (from stored content or sample code)
   useEffect(() => {
-    triggerRender(SAMPLE_CODE);
+    triggerRender(contentRef.current);
     return () => {
       if (renderTimeoutRef.current) clearTimeout(renderTimeoutRef.current);
     };
   }, [triggerRender]);
 
-  // Warn before navigating away with unsaved changes
+  // Persist title to localStorage when it changes
   useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (contentRef.current !== SAMPLE_CODE) {
-        e.preventDefault();
-      }
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, []);
+    saveTitle(title);
+  }, [title]);
 
   // --- Monaco setup ---
   const handleEditorMount: OnMount = (editor, monaco) => {
@@ -386,7 +418,7 @@ export function LandingPage() {
               <Panel defaultSize={50} minSize={20}>
                 <Editor
                   height="100%"
-                  defaultValue={SAMPLE_CODE}
+                  defaultValue={initialContent}
                   language="plantuml"
                   theme="vs-dark"
                   onMount={handleEditorMount}
@@ -394,6 +426,7 @@ export function LandingPage() {
                     if (val !== undefined) {
                       contentRef.current = val;
                       setLineCount(val.split("\n").length);
+                      saveContent(val);
                       triggerRender(val);
                     }
                   }}
