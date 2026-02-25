@@ -10,7 +10,6 @@ export async function onDisconnect({
   context,
   socketId,
 }: onDisconnectPayload): Promise<void> {
-  const documentId = parseInt(documentName, 10);
   const meta = (document as any).meta as DocumentMeta | undefined;
   const ctx = context as {
     user_id?: number;
@@ -28,11 +27,11 @@ export async function onDisconnect({
   }
 
   logger.info(
-    `User ${ctx?.user_id ?? "unknown"} disconnected from document ${documentId} (${clientsCount} clients remaining)`,
+    `User ${ctx?.user_id ?? "unknown"} disconnected from document ${documentName} (${clientsCount} clients remaining)`,
   );
 
   if (clientsCount === 0 && meta) {
     meta.is_session_ending = true;
-    logger.info(`Document ${documentId}: last client disconnected, session ending`);
+    logger.info(`Document ${documentName}: last client disconnected, session ending`);
   }
 }

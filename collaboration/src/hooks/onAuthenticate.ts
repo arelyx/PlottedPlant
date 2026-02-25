@@ -58,14 +58,13 @@ export async function onAuthenticate({
   socketId,
   context,
 }: onAuthenticatePayload): Promise<void> {
-  const documentId = parseInt(documentName, 10);
-  if (isNaN(documentId)) {
-    logger.warn("Invalid document name (not an integer):", documentName);
+  if (!documentName) {
+    logger.warn("Empty document name received");
     throw new Error("Invalid document ID");
   }
 
   if (!token) {
-    logger.warn("No token provided for document", documentId);
+    logger.warn("No token provided for document", documentName);
     throw new Error("Authentication required");
   }
 
@@ -73,7 +72,7 @@ export async function onAuthenticate({
   try {
     result = await internalRequest<AuthResponse>("/auth/validate", {
       method: "POST",
-      body: { token, document_id: documentId },
+      body: { token, document_id: documentName },
       timeoutMs: 5_000,
     });
   } catch (err) {
@@ -82,7 +81,7 @@ export async function onAuthenticate({
   }
 
   if (!result.valid) {
-    logger.info("Auth rejected for document", documentId, ":", result.reason);
+    logger.info("Auth rejected for document", documentName, ":", result.reason);
     throw new Error(result.reason || "Access denied");
   }
 
@@ -109,6 +108,6 @@ export async function onAuthenticate({
   context.authenticated_at = Date.now();
 
   logger.info(
-    `Authenticated user ${result.user_id} (${result.display_name}) on document ${documentId} as ${result.permission} (connections: ${currentCount + 1}/${MAX_CONNECTIONS_PER_USER})`,
+    `Authenticated user ${result.user_id} (${result.display_name}) on document ${documentName} as ${result.permission} (connections: ${currentCount + 1}/${MAX_CONNECTIONS_PER_USER})`,
   );
 }
