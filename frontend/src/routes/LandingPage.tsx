@@ -114,7 +114,7 @@ export function LandingPage() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
           <Link to="/" className="text-lg font-semibold">
-            PlantUML IDE
+            PlottedPlant
           </Link>
           <nav className="flex items-center gap-2">
             {user ? (
@@ -259,7 +259,7 @@ export function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t py-8 text-center text-sm text-muted-foreground">
-        PlantUML IDE
+        PlottedPlant
       </footer>
     </div>
   );

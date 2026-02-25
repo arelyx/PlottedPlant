@@ -1,6 +1,6 @@
 # PlottedPlant
 
-A web-based collaborative PlantUML IDE. Create, edit, share, and collaborate on PlantUML diagrams through a browser-based interface with a Monaco code editor, live diagram preview, real-time multi-user collaboration, version history, and document sharing.
+A web-based collaborative PlantUML editor. Create, edit, share, and collaborate on PlantUML diagrams through a browser-based interface with a Monaco code editor, live diagram preview, real-time multi-user collaboration, version history, and document sharing.
 
 ## Architecture
 

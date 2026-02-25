@@ -6,7 +6,7 @@ export function AuthLayout() {
       <div className="w-full max-w-md">
         <Outlet />
         <p className="mt-8 text-center text-sm text-muted-foreground">
-          PlantUML IDE
+          PlottedPlant
         </p>
       </div>
     </div>

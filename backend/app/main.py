@@ -23,7 +23,7 @@ from app.routers import (
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="PlantUML IDE API",
+    title="PlottedPlant API",
     version="1.0.0",
     openapi_url="/api/v1/openapi.json" if settings.app_env == "development" else None,
     docs_url="/api/v1/docs" if settings.app_env == "development" else None,
