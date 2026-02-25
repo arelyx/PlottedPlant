@@ -315,12 +315,6 @@ export function LandingPage() {
           <Link to="/" className="text-sm font-bold hover:opacity-80">
             PlottedPlant
           </Link>
-          <Link
-            to="/templates"
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
-            Templates
-          </Link>
           <span className="text-muted-foreground">/</span>
           {editingTitle ? (
             <Input
@@ -339,6 +333,12 @@ export function LandingPage() {
               {title}
             </button>
           )}
+          <Link
+            to="/templates"
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            Templates
+          </Link>
         </div>
 
         <div className="flex items-center gap-1">
