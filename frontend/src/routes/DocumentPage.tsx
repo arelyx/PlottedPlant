@@ -5,8 +5,8 @@ import type * as Monaco from "monaco-editor";
 import { registerPlantUMLLanguage } from "@/lib/plantuml-monaco";
 import {
   Panel,
-  Group as PanelGroup,
-  Separator as PanelResizeHandle,
+  Group,
+  Separator,
 } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -144,7 +144,7 @@ export function DocumentPage() {
   // --- Load document metadata ---
   const loadDocument = useCallback(async () => {
     try {
-      const data = await getDocument(documentId);
+      const data = await getDocument(documentId!);
       setDoc(data);
       setTitle(data.title);
       setLoadError(null);
@@ -353,7 +353,7 @@ export function DocumentPage() {
       setEditingTitle(false);
       return;
     }
-    await updateDocument(documentId, { title: title.trim() });
+    await updateDocument(documentId!, { title: title.trim() });
     setDoc((prev) => (prev ? { ...prev, title: title.trim() } : prev));
     setEditingTitle(false);
   };
@@ -564,7 +564,7 @@ export function DocumentPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Editor + Preview */}
         <div className="flex-1 overflow-hidden">
-          <PanelGroup direction="horizontal">
+          <Group orientation="horizontal">
             {viewMode !== "preview" && (
               <>
                 <Panel defaultSize={50} minSize={20}>
@@ -590,7 +590,7 @@ export function DocumentPage() {
                   />
                 </Panel>
                 {viewMode === "split" && (
-                  <PanelResizeHandle className="w-1.5 bg-border hover:bg-primary/20 transition-colors" />
+                  <Separator className="w-1.5 bg-border hover:bg-primary/20 transition-colors" />
                 )}
               </>
             )}
@@ -668,13 +668,13 @@ export function DocumentPage() {
                   </div>
                 </Panel>
               )}
-          </PanelGroup>
+          </Group>
         </div>
 
         {/* Version History Panel */}
         {showHistory && (
           <VersionHistoryPanel
-            documentId={documentId}
+            documentId={documentId!}
             permission={doc.permission}
             refreshKey={historyRefreshKey}
             onClose={() => setShowHistory(false)}
@@ -692,7 +692,7 @@ export function DocumentPage() {
         open={showShare}
         onOpenChange={setShowShare}
         resourceType="document"
-        resourceId={documentId}
+        resourceId={documentId!}
         resourceName={doc.title}
       />
 

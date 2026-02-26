@@ -5,8 +5,8 @@ import type * as Monaco from "monaco-editor";
 import { registerPlantUMLLanguage } from "@/lib/plantuml-monaco";
 import {
   Panel,
-  Group as PanelGroup,
-  Separator as PanelResizeHandle,
+  Group,
+  Separator,
 } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -426,7 +426,7 @@ export function LandingPage() {
 
       {/* Editor + Preview */}
       <div className="flex-1 overflow-hidden">
-        <PanelGroup direction="horizontal">
+        <Group orientation="horizontal">
           {viewMode !== "preview" && (
             <>
               <Panel defaultSize={50} minSize={20}>
@@ -459,7 +459,7 @@ export function LandingPage() {
                 />
               </Panel>
               {viewMode === "split" && (
-                <PanelResizeHandle className="w-1.5 bg-border hover:bg-primary/20 transition-colors" />
+                <Separator className="w-1.5 bg-border hover:bg-primary/20 transition-colors" />
               )}
             </>
           )}
@@ -544,7 +544,7 @@ export function LandingPage() {
               </div>
             </Panel>
           )}
-        </PanelGroup>
+        </Group>
       </div>
 
       {/* Status bar */}
