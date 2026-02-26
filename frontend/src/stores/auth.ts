@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, ApiError } from "@/lib/api";
+import { api } from "@/lib/api";
 
 interface User {
   id: number;
