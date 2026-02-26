@@ -12,6 +12,7 @@ from app.routers import (
     folders,
     health,
     internal,
+    oauth,
     preferences,
     render,
     shares,
@@ -52,6 +53,7 @@ app.add_middleware(
 # Routers
 app.include_router(health.router)
 app.include_router(auth.router)
+app.include_router(oauth.router)
 app.include_router(users.router)
 app.include_router(folders.router)
 app.include_router(documents.router)
