@@ -47,6 +47,9 @@ class User(Base):
     password_reset_tokens: Mapped[list["PasswordResetToken"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    email_verification_tokens: Mapped[list["EmailVerificationToken"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
     preferences: Mapped["UserPreferences | None"] = relationship(
         back_populates="user", cascade="all, delete-orphan", uselist=False
     )
