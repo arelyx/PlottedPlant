@@ -30,8 +30,11 @@ services:
       retries: 3
       start_period: 30s
 
-  # Override Nginx to use dev config (proxies to frontend dev server)
+  # Override Nginx to use dev config (proxies to frontend dev server).
+  # Resets the production envsubst command back to the default nginx entrypoint,
+  # and mounts the dev config directly as nginx.conf (no TLS, no domain needed).
   nginx:
+    command: ["nginx", "-g", "daemon off;"]
     volumes:
       - ./nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro
     ports:

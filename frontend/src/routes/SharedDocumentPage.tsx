@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import Editor, { type OnMount } from "@monaco-editor/react";
-import type * as Monaco from "monaco-editor";
+import Editor from "@monaco-editor/react";
 import { registerPlantUMLLanguage } from "@/lib/plantuml-monaco";
 import {
   Panel,
-  Group as PanelGroup,
-  Separator as PanelResizeHandle,
+  Group,
+  Separator,
 } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -221,7 +220,7 @@ export function SharedDocumentPage() {
 
       {/* Editor + Preview */}
       <div className="flex-1 overflow-hidden">
-        <PanelGroup direction="horizontal">
+        <Group orientation="horizontal">
           <Panel defaultSize={50} minSize={20}>
             <Editor
               height="100%"
@@ -247,7 +246,7 @@ export function SharedDocumentPage() {
               }}
             />
           </Panel>
-          <PanelResizeHandle className="w-1.5 bg-border hover:bg-primary/20 transition-colors" />
+          <Separator className="w-1.5 bg-border hover:bg-primary/20 transition-colors" />
           <Panel defaultSize={50} minSize={20}>
             <div className="h-full flex flex-col bg-muted/30">
               <div className="flex items-center gap-1 px-2 py-1 border-b text-xs">
@@ -294,7 +293,7 @@ export function SharedDocumentPage() {
               </div>
             </div>
           </Panel>
-        </PanelGroup>
+        </Group>
       </div>
     </div>
   );

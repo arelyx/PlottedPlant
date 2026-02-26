@@ -267,11 +267,10 @@ export function TemplateBrowserPage() {
 function TemplateCard({
   template,
   onPreview,
-  loading,
 }: {
   template: TemplateListItem;
   onPreview: () => void;
-  loading: boolean;
+  loading?: boolean;
 }) {
   return (
     <div

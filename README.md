@@ -154,74 +154,162 @@ docker compose logs --tail=50 backend
 
 ## Production Deployment
 
-### 1. Configure environment
+> **Dev vs Production:** Development uses `docker compose up` which auto-merges
+> `docker-compose.override.yml` (Vite HMR, hot-reload, HTTP only). Production
+> uses `docker compose -f docker-compose.yml up` to skip the dev override and
+> serve pre-built static files behind TLS.
+
+### 1. Install Docker
+
+Install Docker Engine and the Compose plugin from the official repository (not your
+distro's package manager) to get the latest version:
+
+```bash
+# Ubuntu/Debian — see https://docs.docker.com/engine/install/ for other distros
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo tee /etc/apt/keyrings/docker.asc > /dev/null
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+  https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+### 2. Configure environment
+
+```bash
+cp .env.example .env
+```
 
 Edit `.env` with production values:
 
-- Set strong, unique secrets for `POSTGRES_PASSWORD`, `JWT_SECRET_KEY`, and `INTERNAL_SECRET`
-- Set `PUBLIC_URL` and `PUBLIC_DOMAIN` to your actual domain
-- Configure SMTP for transactional emails
-- (Optional) Configure OAuth credentials for Google/GitHub login
-- (Optional) Configure `BACKUP_*` variables for automated off-site backups
-
-### 2. Build the frontend
-
 ```bash
-docker compose run --rm frontend npm run build
+# Generate secrets (run each, paste into .env)
+openssl rand -base64 32   # → POSTGRES_PASSWORD
+openssl rand -hex 64      # → JWT_SECRET_KEY
+openssl rand -hex 32      # → INTERNAL_SECRET
 ```
 
-This produces static files in `frontend/dist/` that Nginx serves directly in production.
+Set the domain and URL:
 
-### 3. Obtain TLS certificate
-
-```bash
-# First, start Nginx on port 80 for the ACME challenge
-docker compose up -d nginx
-
-# Issue the certificate
-docker compose run --rm certbot certbot certonly \
-  --webroot -w /var/www/certbot \
-  -d your-domain.com \
-  --email your-email@example.com \
-  --agree-tos \
-  --no-eff-email
+```env
+PUBLIC_URL=https://yourdomain.com
+PUBLIC_DOMAIN=yourdomain.com
 ```
 
-Update the `ssl_certificate` and `ssl_certificate_key` paths in `nginx/nginx.conf` to match your domain.
+`PUBLIC_DOMAIN` is used at container startup — `nginx/nginx.conf` contains `${PUBLIC_DOMAIN}` placeholders that are resolved via `envsubst` when the nginx container starts. You do **not** need to edit nginx.conf manually.
 
-### 4. Start all services
+Also configure:
+- SMTP credentials for transactional emails
+- (Optional) OAuth credentials for Google/GitHub login
+- (Optional) `BACKUP_*` variables for automated off-site backups
+
+### 3. Build the frontend
+
+The production compose file serves pre-built static files from `frontend/dist/`.
+Build them with Docker so you don't need Node installed on the host:
 
 ```bash
-# Use only the production compose file (skip the dev override)
-docker compose -f docker-compose.yml up -d
+# Build and extract static assets
+docker build \
+  --build-arg VITE_API_BASE_URL=https://yourdomain.com/api/v1 \
+  --build-arg VITE_WS_BASE_URL=wss://yourdomain.com/collaboration \
+  --build-arg VITE_PUBLIC_URL=https://yourdomain.com \
+  -t plantuml-frontend-build \
+  -f frontend/Dockerfile frontend/
+
+# Extract the dist/ directory from the build image
+CID=$(docker create --entrypoint="" plantuml-frontend-build /bin/true)
+docker cp "$CID":/dist frontend/dist
+docker rm "$CID"
 ```
 
-### 5. Run migrations and verify
+### 4. Obtain TLS certificate
+
+DNS must already point your domain (and optionally `www.`) at the server.
 
 ```bash
-docker compose run --rm backend alembic upgrade head
-docker compose ps
-curl -sf https://your-domain.com/api/v1/health
+# Start a temporary nginx to serve the ACME challenge
+docker run -d --name certbot-nginx \
+  -p 80:80 \
+  -v ./nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro \
+  -v plantuml_certbot_webroot:/var/www/certbot \
+  nginx:1.28.2-alpine
+
+# Request the certificate
+docker run --rm \
+  -v plantuml_certbot_certs:/etc/letsencrypt \
+  -v plantuml_certbot_webroot:/var/www/certbot \
+  certbot/certbot:latest certonly \
+    --webroot -w /var/www/certbot \
+    -d yourdomain.com -d www.yourdomain.com \
+    --non-interactive --agree-tos \
+    --email you@yourdomain.com
+
+# Remove the temporary nginx
+docker rm -f certbot-nginx
 ```
 
-### 6. Set up automated certificate renewal
+The certificate and key are stored in the `plantuml_certbot_certs` Docker volume,
+which the production nginx container mounts at `/etc/letsencrypt`. The paths in
+nginx.conf (`/etc/letsencrypt/live/${PUBLIC_DOMAIN}/...`) will resolve correctly
+as long as `PUBLIC_DOMAIN` in `.env` matches the domain you requested the cert for.
 
-Add a cron job to reload Nginx daily (Certbot renews automatically via its container):
+### 5. Start all services
+
+```bash
+# Production only — explicitly exclude the dev override
+docker compose -f docker-compose.yml up -d --build
+```
+
+### 6. Run migrations and seed data
+
+```bash
+docker compose -f docker-compose.yml exec backend alembic upgrade head
+docker compose -f docker-compose.yml exec backend python -m app.scripts.seed_templates
+```
+
+### 7. Verify
+
+```bash
+docker compose -f docker-compose.yml ps                         # all containers healthy
+curl -sk https://yourdomain.com/health                          # → ok
+curl -sk https://yourdomain.com/api/v1/health                   # → {"status":"healthy",...}
+curl -sk -o /dev/null -w "%{http_code}" http://yourdomain.com/  # → 301 (HTTP→HTTPS)
+curl -sk -o /dev/null -w "%{http_code}" https://www.yourdomain.com/  # → 301 (www→non-www)
+```
+
+### Certificate renewal
+
+The `certbot` container runs a renewal loop (checks every 12 hours). To pick up
+renewed certificates, reload nginx periodically with a cron job:
 
 ```cron
-0 3 * * * cd /opt/plantuml-ide && docker compose exec nginx nginx -s reload > /dev/null 2>&1
+0 3 * * * cd /path/to/PlottedPlant && docker compose -f docker-compose.yml exec nginx nginx -s reload > /dev/null 2>&1
 ```
 
 ### Updating a production deployment
 
 ```bash
-cd /opt/plantuml-ide
+cd /path/to/PlottedPlant
 git pull origin main
-docker compose run --rm frontend npm run build      # if frontend changed
-docker compose build backend collaboration          # rebuild images
-docker compose run --rm backend alembic upgrade head # apply new migrations
-docker compose up -d --no-deps backend collaboration nginx
-docker compose ps
+
+# Rebuild frontend if frontend/ changed
+docker build \
+  --build-arg VITE_API_BASE_URL=https://yourdomain.com/api/v1 \
+  --build-arg VITE_WS_BASE_URL=wss://yourdomain.com/collaboration \
+  --build-arg VITE_PUBLIC_URL=https://yourdomain.com \
+  -t plantuml-frontend-build -f frontend/Dockerfile frontend/
+CID=$(docker create --entrypoint="" plantuml-frontend-build /bin/true)
+docker cp "$CID":/dist frontend/dist && docker rm "$CID"
+
+# Rebuild backend/collaboration images and apply migrations
+docker compose -f docker-compose.yml build backend collaboration
+docker compose -f docker-compose.yml exec backend alembic upgrade head
+docker compose -f docker-compose.yml up -d --no-deps backend collaboration nginx
+docker compose -f docker-compose.yml ps
 ```
 
 ## Backup and Restore
@@ -296,8 +384,8 @@ frontend/
     lib/                 # API client, collaboration session, utilities
 
 nginx/
-  nginx.conf             # Production config (HTTPS, CSP headers)
-  nginx.dev.conf         # Development config (HTTP, proxy to Vite)
+  nginx.conf             # Production template — ${PUBLIC_DOMAIN} resolved by envsubst at startup
+  nginx.dev.conf         # Development config (HTTP only, proxy to Vite dev server)
 
 postgres/
   postgresql.conf        # PostgreSQL tuning
@@ -322,7 +410,7 @@ All configuration is via environment variables, loaded from `.env` by Docker Com
 | `JWT_SECRET_KEY` | - | Secret for signing JWT access tokens |
 | `INTERNAL_SECRET` | - | Shared secret for backend-collaboration communication |
 | `PUBLIC_URL` | - | Public-facing URL (e.g., `https://app.example.com`) |
-| `PUBLIC_DOMAIN` | - | Domain name (used in Nginx config) |
+| `PUBLIC_DOMAIN` | - | Domain name — used by nginx.conf template for server_name and TLS cert paths |
 | `CORS_ORIGINS` | `${PUBLIC_URL}` | Comma-separated allowed CORS origins |
 | `SMTP_HOST` | - | SMTP server for transactional emails |
 | `SMTP_PORT` | `587` | SMTP port |
