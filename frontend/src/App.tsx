@@ -12,6 +12,7 @@ import { DocumentPage } from "@/routes/DocumentPage";
 import { TemplateBrowserPage } from "@/routes/TemplateBrowserPage";
 import { SharedDocumentPage } from "@/routes/SharedDocumentPage";
 import { LandingPage } from "@/routes/LandingPage";
+import { OAuthCallbackPage } from "@/routes/OAuthCallbackPage";
 
 function App() {
   return (
@@ -41,6 +42,11 @@ function App() {
         {/* Public app routes (AppLayout without AuthGuard) */}
         <Route element={<AppLayout />}>
           <Route path="/templates" element={<TemplateBrowserPage />} />
+        </Route>
+
+        {/* OAuth callback */}
+        <Route element={<AuthLayout />}>
+          <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
         </Route>
 
         {/* Public share access */}
