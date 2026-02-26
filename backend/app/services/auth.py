@@ -4,6 +4,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.models.email_verification_token import EmailVerificationToken
 from app.models.password_reset_token import PasswordResetToken
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
@@ -208,3 +209,70 @@ async def validate_and_consume_reset_token(
         select(User).where(User.id == reset_token.user_id)
     )
     return user_result.scalar_one_or_none()
+
+
+async def create_email_verification_token(db: AsyncSession, user_id: int) -> str:
+    """Create an email verification token. Returns the raw token (for email)."""
+    raw_token = generate_token()
+    token_hash = hash_token(raw_token)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+
+    # Invalidate any existing unused verification tokens for this user
+    await db.execute(
+        update(EmailVerificationToken)
+        .where(EmailVerificationToken.user_id == user_id)
+        .where(EmailVerificationToken.used_at.is_(None))
+        .values(used_at=datetime.now(timezone.utc))
+    )
+
+    token = EmailVerificationToken(
+        user_id=user_id,
+        token_hash=token_hash,
+        expires_at=expires_at,
+    )
+    db.add(token)
+    await db.flush()
+    return raw_token
+
+
+async def validate_and_consume_verification_token(
+    db: AsyncSession, raw_token: str
+) -> User | None:
+    """Validate and consume an email verification token. Returns the user or None."""
+    token_hash = hash_token(raw_token)
+    now = datetime.now(timezone.utc)
+
+    result = await db.execute(
+        select(EmailVerificationToken)
+        .where(EmailVerificationToken.token_hash == token_hash)
+        .where(EmailVerificationToken.used_at.is_(None))
+        .where(EmailVerificationToken.expires_at > now)
+    )
+    verification_token = result.scalar_one_or_none()
+    if verification_token is None:
+        return None
+
+    # Mark as used
+    verification_token.used_at = now
+
+    # Invalidate all other active verification tokens for this user
+    await db.execute(
+        update(EmailVerificationToken)
+        .where(EmailVerificationToken.user_id == verification_token.user_id)
+        .where(EmailVerificationToken.id != verification_token.id)
+        .where(EmailVerificationToken.used_at.is_(None))
+        .values(used_at=now)
+    )
+
+    await db.flush()
+
+    # Load user and mark email as verified
+    user_result = await db.execute(
+        select(User).where(User.id == verification_token.user_id)
+    )
+    user = user_result.scalar_one_or_none()
+    if user is not None:
+        user.is_email_verified = True
+        await db.flush()
+
+    return user
