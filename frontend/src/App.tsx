@@ -7,6 +7,7 @@ import { LoginPage } from "@/routes/LoginPage";
 import { RegisterPage } from "@/routes/RegisterPage";
 import { ForgotPasswordPage } from "@/routes/ForgotPasswordPage";
 import { ResetPasswordPage } from "@/routes/ResetPasswordPage";
+import { VerifyEmailPage } from "@/routes/VerifyEmailPage";
 import { DashboardPage } from "@/routes/DashboardPage";
 import { DocumentPage } from "@/routes/DocumentPage";
 import { TemplateBrowserPage } from "@/routes/TemplateBrowserPage";
@@ -24,6 +25,7 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
         </Route>
 
         {/* Protected routes */}
