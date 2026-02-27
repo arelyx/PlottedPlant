@@ -3,14 +3,13 @@
 #
 # Usage:
 #   ./scripts/deploy.sh              # Full deploy (build + start)
-#   ./scripts/deploy.sh --init       # First-time deploy (includes SSL cert setup)
 #   ./scripts/deploy.sh --restart    # Restart only (no rebuild)
 #   ./scripts/deploy.sh --dev        # Start in dev mode
 #
 # Prerequisites:
 #   - Docker and Docker Compose installed
+#   - Caddy installed and configured on the host (handles TLS)
 #   - .env file created from .env.example with secrets filled in
-#   - DNS A records pointing to this server (for --init)
 
 set -euo pipefail
 
@@ -54,44 +53,6 @@ preflight() {
 }
 
 # ─────────────────────────────────────────────
-# First-time SSL certificate setup
-# ─────────────────────────────────────────────
-init_ssl() {
-    local domain="${PUBLIC_DOMAIN:?PUBLIC_DOMAIN not set in .env}"
-    local email="${SMTP_FROM_EMAIL:-admin@$domain}"
-
-    log "Checking for existing SSL certificates..."
-    if [ -d "/etc/letsencrypt/live/$domain" ]; then
-        warn "SSL certificates already exist for $domain. Skipping."
-    else
-        log "Obtaining SSL certificate for $domain and www.$domain..."
-
-        if ! command -v certbot &>/dev/null; then
-            log "Installing certbot..."
-            sudo apt-get update -qq && sudo apt-get install -y -qq certbot
-        fi
-
-        # Stop anything on port 80
-        sudo docker compose -f docker-compose.yml down 2>/dev/null || true
-
-        sudo certbot certonly --standalone \
-            -d "$domain" -d "www.$domain" \
-            --non-interactive --agree-tos -m "$email"
-
-        log "SSL certificate obtained successfully."
-    fi
-
-    # Copy certs to Docker volume
-    log "Copying certificates to Docker volume..."
-    docker volume create plantuml_certbot_certs 2>/dev/null || true
-    sudo docker run --rm \
-        -v plantuml_certbot_certs:/etc/letsencrypt \
-        -v /etc/letsencrypt:/host-certs:ro \
-        alpine sh -c "cp -a /host-certs/. /etc/letsencrypt/"
-    log "Certificates copied to Docker volume."
-}
-
-# ─────────────────────────────────────────────
 # Build frontend static assets
 # ─────────────────────────────────────────────
 build_frontend() {
@@ -131,6 +92,7 @@ start_prod() {
     sudo docker compose -f docker-compose.yml exec -T backend alembic upgrade head
 
     log "Production stack is running."
+    log "Nginx listening on 127.0.0.1:8080 (Caddy handles public TLS)."
     log "Site available at: https://${PUBLIC_DOMAIN}"
 }
 
@@ -158,11 +120,6 @@ main() {
     preflight
 
     case "${1:-}" in
-        --init)
-            init_ssl
-            build_frontend
-            start_prod
-            ;;
         --restart)
             log "Restarting production stack..."
             sudo docker compose -f docker-compose.yml down
