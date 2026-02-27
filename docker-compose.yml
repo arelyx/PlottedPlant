@@ -241,7 +241,7 @@ volumes:
     driver: local
     name: plantuml_backend_tmp
   certbot_certs:
-    driver: local
+    external: true
     name: plantuml_certbot_certs
   certbot_webroot:
     driver: local
