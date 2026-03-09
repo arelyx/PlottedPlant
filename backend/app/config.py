@@ -31,13 +31,9 @@ class Settings(BaseSettings):
     oauth_github_client_secret: str = ""
     oauth_redirect_base_url: str = ""
 
-    # SMTP
-    smtp_host: str = ""
-    smtp_port: int = 587
-    smtp_user: str = ""
-    smtp_password: str = ""
-    smtp_from_email: str = ""
-    smtp_use_tls: bool = True
+    # Email (Resend)
+    resend_api_key: str = ""
+    email_from: str = "PlottedPlant <noreply@plottedplant.com>"
 
     # Public
     public_url: str = "http://localhost"

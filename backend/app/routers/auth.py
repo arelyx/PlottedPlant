@@ -19,6 +19,7 @@ from app.schemas.auth import (
     UserResponse,
 )
 from app.services.auth import (
+    create_email_verification_token,
     create_password_reset_token,
     create_refresh_token,
     create_user,
@@ -28,7 +29,9 @@ from app.services.auth import (
     revoke_refresh_token,
     rotate_refresh_token,
     validate_and_consume_reset_token,
+    validate_and_consume_verification_token,
 )
+from app.services.email import send_password_reset_email, send_verification_email
 from app.utils.security import (
     create_access_token,
     hash_password,
@@ -88,11 +91,11 @@ async def register(
     user = await create_user(db, body.email, body.username, body.display_name, body.password)
     access_token, expires_in = create_access_token(user.id)
     raw_refresh = await create_refresh_token(db, user.id)
+    raw_verify_token = await create_email_verification_token(db, user.id)
     await db.commit()
 
     _set_refresh_cookie(response, raw_refresh)
-
-    # TODO: send verification email asynchronously (Step 2 enhancement or deferred)
+    send_verification_email(user.email, user.username, raw_verify_token)
 
     return AuthResponse(
         user=UserResponse.model_validate(user),
@@ -213,7 +216,7 @@ async def password_forgot(
     if user is not None:
         raw_token = await create_password_reset_token(db, user.id)
         await db.commit()
-        # TODO: send password reset email with raw_token
+        send_password_reset_email(user.email, user.username, raw_token)
         logger.info("Password reset token created for user %s", user.id)
 
     return MessageResponse(
@@ -277,17 +280,18 @@ async def email_verify(
     body: EmailVerifyRequest,
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
-    # Email verification uses the same token pattern as password reset
-    # For now, this is a placeholder — full implementation requires
-    # email verification tokens (separate table or reuse password_reset_tokens)
-    # TODO: implement email verification token validation
-    raise HTTPException(
-        status_code=400,
-        detail={
-            "code": "INVALID_VERIFICATION_TOKEN",
-            "message": "Invalid or expired verification token.",
-        },
-    )
+    user = await validate_and_consume_verification_token(db, body.token)
+    if user is None:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "INVALID_VERIFICATION_TOKEN",
+                "message": "Invalid or expired verification token.",
+            },
+        )
+
+    await db.commit()
+    return MessageResponse(message="Email verified successfully.")
 
 
 @router.post("/email/resend-verification")
@@ -298,7 +302,8 @@ async def resend_verification(
     if user.is_email_verified:
         return MessageResponse(message="Email is already verified.")
 
-    # TODO: generate verification token and send email
-    logger.info("Verification email resend requested for user %s", user.id)
+    raw_token = await create_email_verification_token(db, user.id)
+    await db.commit()
+    send_verification_email(user.email, user.username, raw_token)
 
     return MessageResponse(message="Verification email sent.")
