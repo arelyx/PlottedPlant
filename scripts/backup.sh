@@ -1,7 +1,7 @@
 #!/bin/bash
 # scripts/backup.sh — Automated PostgreSQL backup with optional encryption and S3 upload
 # Run via cron every 6 hours:
-#   0 */6 * * * cd /opt/plantuml-ide && source .env && ./scripts/backup.sh >> /var/log/plantuml-backup.log 2>&1
+#   0 */6 * * * cd /home/arelyx/PlottedPlant && source .env && ./scripts/backup.sh >> /var/log/plantuml-backup.log 2>&1
 
 set -euo pipefail
 
