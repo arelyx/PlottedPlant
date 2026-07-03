@@ -156,7 +156,11 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # postgres:18 sets PGDATA=/var/lib/postgresql/18/docker and declares
+      # VOLUME /var/lib/postgresql, so the data volume must mount the parent
+      # dir — mounting /var/lib/postgresql/data leaves the cluster in an
+      # anonymous volume that `docker compose down` orphans.
+      - postgres_data:/var/lib/postgresql
       - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       - ./postgres/init/:/docker-entrypoint-initdb.d/:ro
       - postgres_backups:/backups
