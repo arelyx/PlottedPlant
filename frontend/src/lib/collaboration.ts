@@ -36,12 +36,11 @@ export interface CollaboratorInfo {
 /**
  * Pick the first available cursor color not currently used by other collaborators.
  */
-function pickColor(usedColors: Set<string>): (typeof CURSOR_COLORS)[number] {
-  for (const c of CURSOR_COLORS) {
-    if (!usedColors.has(c.color)) return c;
-  }
-  // All in use — cycle back to first
-  return CURSOR_COLORS[0];
+function pickColor(userId: number): (typeof CURSOR_COLORS)[number] {
+  // Stable per user and spread across the palette. Collisions only occur for
+  // ids that are congruent modulo the palette size — acceptable for a session.
+  const index = ((userId % CURSOR_COLORS.length) + CURSOR_COLORS.length) % CURSOR_COLORS.length;
+  return CURSOR_COLORS[index];
 }
 
 // --- Dynamic CSS injection for remote cursor colors & name labels ---
@@ -170,13 +169,11 @@ export function createCollaborationSession(
     },
   });
 
-  // Pick a cursor color based on what's already in use
-  const usedColors = new Set<string>();
-  provider.awareness?.getStates().forEach((state: Record<string, unknown>) => {
-    const u = state.user as { color?: string } | undefined;
-    if (u?.color) usedColors.add(u.color);
-  });
-  const myColor = pickColor(usedColors);
+  // Derive the cursor color deterministically from the user id. Reading
+  // awareness here runs before the socket connects, so remote states aren't
+  // known yet — the old "pick an unused color" scan always saw an empty set and
+  // handed everyone the first color.
+  const myColor = pickColor(user.id);
 
   // Set local awareness state
   provider.awareness?.setLocalState({

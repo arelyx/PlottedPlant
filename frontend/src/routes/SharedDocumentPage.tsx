@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { accessPublicLink, type PublicDocumentAccess } from "@/lib/shares";
 import { api } from "@/lib/api";
+import { sanitizeSvg } from "@/lib/sanitize";
 import { usePreferencesStore } from "@/stores/preferences";
 import { useAuthStore } from "@/stores/auth";
 import { duplicateDocument } from "@/lib/documents";
@@ -283,7 +284,7 @@ export function SharedDocumentPage() {
                       transform: `scale(${zoom / 100})`,
                       transformOrigin: "top left",
                     }}
-                    dangerouslySetInnerHTML={{ __html: svgContent }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeSvg(svgContent) }}
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full text-muted-foreground text-sm">

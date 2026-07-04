@@ -22,6 +22,7 @@ import {
   type DocumentDetail,
 } from "@/lib/documents";
 import { api } from "@/lib/api";
+import { sanitizeSvg } from "@/lib/sanitize";
 import { usePreferencesStore } from "@/stores/preferences";
 import { useAuthStore } from "@/stores/auth";
 import { VersionHistoryPanel } from "@/components/VersionHistoryPanel";
@@ -654,7 +655,7 @@ export function DocumentPage() {
                             className={`inline-block transition-opacity ${renderError ? "opacity-40" : ""}`}
                             style={{ transform: `scale(${zoom / 100})`, transformOrigin: "top left" }}
                             dangerouslySetInnerHTML={{
-                              __html: svgContent || lastGoodSvg || "",
+                              __html: sanitizeSvg(svgContent || lastGoodSvg || ""),
                             }}
                           />
                           {!svgContent && !lastGoodSvg && !rendering && (
