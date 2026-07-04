@@ -48,6 +48,34 @@ async def _proxy_render(source: str, format: str) -> httpx.Response:
     return response
 
 
+def classify_render_response(response: httpx.Response) -> dict | None:
+    """
+    Classify a PlantUML response. Returns a syntax-error dict for a bad diagram,
+    or None if the render succeeded. Raises 502 for a genuine upstream failure.
+
+    PlantUML signals syntax errors two ways: sometimes with the structured
+    X-PlantUML-Diagram-Error header, sometimes as a plain non-200 whose body is
+    still a rendered error *image*. Both are user errors (422 / valid:false). A
+    non-200 whose body is NOT an image (jetty HTML error page, OOM, body-limit
+    rejection) is a gateway failure — without this distinction the caller would
+    hand that error body back as a 200 mislabeled image.
+    """
+    error = _parse_plantuml_error(response.headers)
+    if error:
+        return error
+    if response.status_code == 200:
+        return None
+    content_type = response.headers.get("content-type", "")
+    if content_type.startswith("image/"):
+        return {"message": "Syntax error"}
+    logger.error(
+        "PlantUML returned %s with content-type %r",
+        response.status_code,
+        content_type,
+    )
+    raise HTTPException(status_code=502, detail="PlantUML rendering failed")
+
+
 @router.post("/svg")
 async def render_svg(
     body: RenderRequest,
@@ -60,7 +88,7 @@ async def render_svg(
         logger.error("PlantUML server request failed: %s", e)
         raise HTTPException(status_code=502, detail="PlantUML server unavailable")
 
-    error = _parse_plantuml_error(response.headers)
+    error = classify_render_response(response)
     if error:
         raise HTTPException(
             status_code=422,
@@ -74,16 +102,24 @@ async def render_svg(
 
 
 def _inject_dpi(source: str, dpi: int) -> str:
-    """Inject skinparam dpi directive after @startuml for high-res PNG export."""
-    directive = f"skinparam dpi {dpi}\n"
-    # Insert right after the @start line (e.g. @startuml, @startjson, etc.)
-    for i, line in enumerate(source.split("\n")):
-        if line.strip().lower().startswith("@start"):
-            lines = source.split("\n")
-            lines.insert(i + 1, f"skinparam dpi {dpi}")
-            return "\n".join(lines)
-    # No @start found — prepend the directive
-    return directive + source
+    """Inject a skinparam dpi directive for high-res PNG rendering.
+
+    Only @startuml (and sourceless input, which PlantUML treats as implicit
+    UML) accepts a skinparam directive. For data diagrams — @startjson,
+    @startyaml, @startditaa, @startmath, … — the body is literal data and an
+    injected skinparam line would make it unparseable, so those are left as-is.
+    """
+    directive = f"skinparam dpi {dpi}"
+    lines = source.split("\n")
+    for i, line in enumerate(lines):
+        stripped = line.strip().lower()
+        if stripped.startswith("@start"):
+            if stripped.startswith("@startuml"):
+                lines.insert(i + 1, directive)
+                return "\n".join(lines)
+            return source
+    # No @start directive: PlantUML renders this as implicit UML.
+    return directive + "\n" + source
 
 
 @router.post("/png")
@@ -99,7 +135,7 @@ async def render_png(
         logger.error("PlantUML server request failed: %s", e)
         raise HTTPException(status_code=502, detail="PlantUML server unavailable")
 
-    error = _parse_plantuml_error(response.headers)
+    error = classify_render_response(response)
     if error:
         raise HTTPException(
             status_code=422,
@@ -117,15 +153,17 @@ async def check_syntax(
     body: RenderRequest,
     _user_id: int | None = Depends(get_optional_user_id),
 ):
-    """Validate PlantUML syntax without full render."""
+    """Validate PlantUML syntax without returning the rendered image.
+
+    The PlantUML server's /check/ endpoint only supports GET (POST 405s), so we
+    validate by rendering to SVG — a working POST endpoint that sets the
+    diagram-error header on a syntax error — and discard the image body.
+    """
     try:
-        response = await _proxy_render(body.source, "check")
+        response = await _proxy_render(body.source, "svg")
     except httpx.RequestError as e:
         logger.error("PlantUML server request failed: %s", e)
-        raise HTTPException(status_code=502, detail="PlantUML server unavailable")
+        raise HTTPException(status_code=502, detail="Syntax check unavailable")
 
-    error = _parse_plantuml_error(response.headers)
-    if error:
-        return CheckResponse(valid=False, error=error)
-
-    return CheckResponse(valid=True)
+    error = classify_render_response(response)
+    return CheckResponse(valid=error is None, error=error)

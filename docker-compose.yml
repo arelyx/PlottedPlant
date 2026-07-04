@@ -127,7 +127,9 @@ services:
     restart: unless-stopped
     environment:
       - PLANTUML_LIMIT_SIZE=16384
-      - PLANTUML_SECURITY_PROFILE=INTERNET
+      # SANDBOX disables !include/!includeurl so a user-authored diagram can't
+      # be used as an SSRF probe against services on backend_net.
+      - PLANTUML_SECURITY_PROFILE=SANDBOX
     networks:
       - backend_net
     healthcheck:
