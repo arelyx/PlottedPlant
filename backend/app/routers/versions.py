@@ -298,6 +298,16 @@ async def restore_version(
     )
     target_content = target_content_result.scalar_one()
 
+    # No-op if the document already holds the target content — restoring would
+    # otherwise burn two version numbers on identical content.
+    if target_version.content_hash == doc.current_content_hash:
+        return RestoreResponse(
+            restored_to_version=version_number,
+            pre_restore_version=doc.version_counter,
+            post_restore_version=doc.version_counter,
+            content=target_content,
+        )
+
     # Step 1: Save current content as pre-restore version
     pre_restore_version = await create_version(
         db,
