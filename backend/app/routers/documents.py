@@ -470,11 +470,20 @@ async def update_content(
             created_version=False,
         )
 
-    # Content changed — create new version (use internal BIGINT ID for FK)
+    # Content changed — create new version (use internal BIGINT ID for FK).
+    # dedup=True makes the change-check atomic, so a concurrent save of the same
+    # content can't produce a duplicate version.
     version_number = await create_version(
-        db, doc.id, body.content, user_id, source="auto"
+        db, doc.id, body.content, user_id, source="auto", dedup=True
     )
     await db.commit()
+
+    if version_number is None:
+        return ContentUpdateResponse(
+            version_number=doc.version_counter,
+            content_hash=content_hash.hex(),
+            created_version=False,
+        )
 
     return ContentUpdateResponse(
         version_number=version_number,

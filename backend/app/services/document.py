@@ -134,11 +134,20 @@ async def create_version(
     user_id: int,
     source: str = "manual",
     label: str | None = None,
-) -> int:
-    """Create a new document version using the content-addressable dedup pattern.
+    dedup: bool = False,
+) -> int | None:
+    """Create a document version using the content-addressable dedup pattern.
 
-    Returns the new version number. Assumes the caller has already verified
-    that the content has changed (hash differs from current_content_hash).
+    With ``dedup=True`` (auto-save / sync paths) the version is created only if
+    the content actually differs from the document's current content, and the
+    check is atomic — two concurrent saves of identical content can't both
+    create a version. Returns the new version number, or ``None`` when dedup
+    suppressed a no-op.
+
+    With ``dedup=False`` (manual / checkpoint / restore) a version is always
+    created, but the document's edit metadata (``last_edited_by``,
+    ``updated_at``) is left untouched when the content is unchanged — a labeled
+    checkpoint of the current state shouldn't masquerade as a fresh edit.
     """
     content_hash, content_bytes = compute_content_hash(content)
 
@@ -153,20 +162,56 @@ async def create_version(
         .on_conflict_do_nothing(index_elements=["content_hash"])
     )
 
-    # 2. Bump version counter and update current content
-    result = await db.execute(
-        update(Document)
-        .where(Document.id == document_id)
-        .values(
-            current_content=content,
-            current_content_hash=content_hash,
-            version_counter=Document.version_counter + 1,
-            updated_at=func.now(),
-            last_edited_by=user_id,
+    # 2. Bump version counter and (if the content changed) update current content
+    if dedup:
+        # Atomic no-op guard: only proceed if the current hash still differs.
+        result = await db.execute(
+            update(Document)
+            .where(
+                Document.id == document_id,
+                Document.current_content_hash != content_hash,
+            )
+            .values(
+                current_content=content,
+                current_content_hash=content_hash,
+                version_counter=Document.version_counter + 1,
+                updated_at=func.now(),
+                last_edited_by=user_id,
+            )
+            .returning(Document.version_counter)
         )
-        .returning(Document.version_counter)
-    )
-    new_version_number = result.scalar_one()
+        new_version_number = result.scalar_one_or_none()
+        if new_version_number is None:
+            return None  # content unchanged — no version created
+    else:
+        current_hash = (
+            await db.execute(
+                select(Document.current_content_hash).where(Document.id == document_id)
+            )
+        ).scalar_one()
+        if current_hash != content_hash:
+            values = dict(
+                current_content=content,
+                current_content_hash=content_hash,
+                version_counter=Document.version_counter + 1,
+                updated_at=func.now(),
+                last_edited_by=user_id,
+            )
+        else:
+            # Same content: allocate a version number but don't fake an edit.
+            # Setting updated_at to itself keeps it out of onupdate's reach so a
+            # labeled checkpoint doesn't bump the document's modified time.
+            values = dict(
+                version_counter=Document.version_counter + 1,
+                updated_at=Document.updated_at,
+            )
+        result = await db.execute(
+            update(Document)
+            .where(Document.id == document_id)
+            .values(**values)
+            .returning(Document.version_counter)
+        )
+        new_version_number = result.scalar_one()
 
     # 3. Insert version metadata
     await db.execute(

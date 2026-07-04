@@ -106,9 +106,13 @@ async def _sync_content(
     # Fall back to document owner if no editor is known
     effective_user_id = user_id if user_id else doc.owner_id
 
+    # dedup=True: atomic guard against a concurrent identical save (e.g. a REST
+    # autosave racing this flush) creating a duplicate version.
     version_number = await create_version(
-        db, doc.id, content, effective_user_id, source=source
+        db, doc.id, content, effective_user_id, source=source, dedup=True
     )
+    if version_number is None:
+        return False, None
     await db.commit()
     return True, version_number
 
