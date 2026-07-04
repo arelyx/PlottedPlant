@@ -12,7 +12,6 @@ from app.routers import (
     folders,
     health,
     internal,
-    preferences,
     render,
     shares,
     templates,
@@ -59,7 +58,6 @@ app.include_router(render.router)
 app.include_router(export.router)
 app.include_router(versions.router)
 app.include_router(templates.router)
-app.include_router(preferences.router)
 app.include_router(shares.router)
 app.include_router(internal.router)
 
