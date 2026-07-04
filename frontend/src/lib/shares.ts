@@ -1,4 +1,5 @@
 import { api } from "./api";
+import type { DocumentCreateResponse } from "./documents";
 
 export interface ShareUser {
   id: number;
@@ -150,4 +151,14 @@ export interface PublicDocumentAccess {
 
 export async function accessPublicLink(token: string) {
   return api.request<PublicDocumentAccess>(`/share/${token}`, { skipAuth: true });
+}
+
+export async function duplicatePublicLink(
+  token: string,
+  data?: { title?: string; folder_id?: number | null }
+) {
+  return api.request<DocumentCreateResponse>(`/share/${token}/duplicate`, {
+    method: "POST",
+    body: JSON.stringify(data || {}),
+  });
 }

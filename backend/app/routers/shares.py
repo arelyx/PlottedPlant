@@ -12,6 +12,10 @@ from app.models.folder import Folder
 from app.models.folder_share import FolderShare
 from app.models.public_share_link import PublicShareLink
 from app.models.user import User
+from app.schemas.document import (
+    DocumentCreateResponse,
+    DocumentDuplicateRequest,
+)
 from app.schemas.share import (
     CreatePublicLinkRequest,
     CreateShareRequest,
@@ -22,6 +26,8 @@ from app.schemas.share import (
     UpdateShareRequest,
 )
 from app.services.document import (
+    compute_content_hash,
+    create_version,
     resolve_document_internal_id,
     resolve_document_permission,
     resolve_folder_permission,
@@ -611,3 +617,90 @@ async def access_public_link(
             "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
         },
     }
+
+
+@router.post(
+    "/share/{token}/duplicate",
+    response_model=DocumentCreateResponse,
+    status_code=201,
+)
+async def duplicate_public_link(
+    token: str,
+    body: DocumentDuplicateRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Copy a publicly-shared document into the authenticated user's workspace.
+
+    Public-link viewers hold no share row on the source document, so the
+    standard POST /documents/{id}/duplicate 404s for them. This token-scoped
+    path grants copy access on possession of a valid public link instead.
+    """
+    try:
+        token_uuid = uuid.UUID(token)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Link not found or has been revoked")
+
+    link = (
+        await db.execute(
+            select(PublicShareLink).where(
+                PublicShareLink.token == token_uuid,
+                PublicShareLink.is_active.is_(True),
+            )
+        )
+    ).scalar_one_or_none()
+    if link is None:
+        raise HTTPException(status_code=404, detail="Link not found or has been revoked")
+
+    doc = (
+        await db.execute(select(Document).where(Document.id == link.document_id))
+    ).scalar_one_or_none()
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Validate target folder ownership if specified.
+    folder_info = None
+    if body.folder_id is not None:
+        folder = (
+            await db.execute(
+                select(Folder).where(
+                    Folder.id == body.folder_id, Folder.owner_id == user_id
+                )
+            )
+        ).scalar_one_or_none()
+        if folder is None:
+            raise HTTPException(status_code=404, detail="Folder not found")
+        folder_info = {"id": folder.id, "name": folder.name}
+
+    title = body.title or f"{doc.title} (Copy)"
+    content = doc.current_content
+    content_hash, _ = compute_content_hash(content)
+
+    new_doc = Document(
+        title=title,
+        owner_id=user_id,
+        folder_id=body.folder_id,
+        current_content=content,
+        current_content_hash=content_hash,
+        last_edited_by=user_id,
+    )
+    db.add(new_doc)
+    await db.flush()
+
+    version_number = await create_version(
+        db, new_doc.id, content, user_id, source="manual"
+    )
+    await db.commit()
+    await db.refresh(new_doc)
+
+    return DocumentCreateResponse(
+        id=str(new_doc.public_id),
+        title=new_doc.title,
+        folder=folder_info,
+        permission="owner",
+        is_shared=False,
+        content=new_doc.current_content,
+        version_number=version_number,
+        created_at=new_doc.created_at,
+        updated_at=new_doc.updated_at,
+    )
