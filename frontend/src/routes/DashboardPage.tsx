@@ -523,15 +523,19 @@ function FolderCard({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-          <DropdownMenuItem onClick={onRename}>Rename</DropdownMenuItem>
+          {/* Rename/Share/Delete are owner-only per spec §24. */}
           {folder.permission === "owner" && (
-            <DropdownMenuItem onClick={onShare}>Share</DropdownMenuItem>
+            <>
+              <DropdownMenuItem onClick={onRename}>Rename</DropdownMenuItem>
+              <DropdownMenuItem onClick={onShare}>Share</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-destructive" onClick={onDelete}>
+                Delete
+              </DropdownMenuItem>
+            </>
           )}
-          <DropdownMenuSeparator />
-          {folder.permission === "owner" && (
-            <DropdownMenuItem className="text-destructive" onClick={onDelete}>
-              Delete
-            </DropdownMenuItem>
+          {folder.permission !== "owner" && (
+            <DropdownMenuItem disabled>No actions available</DropdownMenuItem>
           )}
         </DropdownMenuContent>
       </DropdownMenu>

@@ -40,7 +40,7 @@ async function renderSvg(source: string): Promise<{ svg?: string; error?: string
 export function SharedDocumentPage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
-  const { resolvedTheme, preferences } = usePreferencesStore();
+  const { resolvedTheme, preferences, isLoaded, load } = usePreferencesStore();
   const { user, isInitialized, initialize } = useAuthStore();
 
   // Attempt to restore auth session from refresh token cookie
@@ -49,6 +49,15 @@ export function SharedDocumentPage() {
       initialize();
     }
   }, [isInitialized, initialize]);
+
+  // Apply the viewer's own preferences (theme, editor settings) once their
+  // session is restored — the share page is outside AppLayout, which is where
+  // preferences are otherwise loaded.
+  useEffect(() => {
+    if (user && !isLoaded) {
+      load();
+    }
+  }, [user, isLoaded, load]);
 
   const [data, setData] = useState<PublicDocumentAccess | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);

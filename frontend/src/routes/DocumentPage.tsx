@@ -379,14 +379,27 @@ export function DocumentPage() {
   };
 
   // --- Title ---
+  const titleSavingRef = useRef(false);
   const handleTitleSave = async () => {
-    if (!doc || title.trim() === doc.title) {
+    // Enter and blur both fire on commit; guard so we PATCH once, not twice.
+    if (titleSavingRef.current) return;
+    const next = title.trim();
+    if (!doc || next === doc.title || !next) {
+      setTitle(doc?.title ?? "");
       setEditingTitle(false);
       return;
     }
-    await updateDocument(documentId!, { title: title.trim() });
-    setDoc((prev) => (prev ? { ...prev, title: title.trim() } : prev));
-    setEditingTitle(false);
+    titleSavingRef.current = true;
+    try {
+      await updateDocument(documentId!, { title: next });
+      setDoc((prev) => (prev ? { ...prev, title: next } : prev));
+    } catch {
+      // Rename is owner-only server-side; on failure revert to the stored title.
+      setTitle(doc.title);
+    } finally {
+      titleSavingRef.current = false;
+      setEditingTitle(false);
+    }
   };
 
   // --- Export (from current editor content, not saved DB content) ---
@@ -487,8 +500,13 @@ export function DocumentPage() {
             />
           ) : (
             <button
-              className="text-sm font-medium hover:underline"
-              onClick={() => !isReadOnly && setEditingTitle(true)}
+              className={
+                doc.permission === "owner"
+                  ? "text-sm font-medium hover:underline"
+                  : "text-sm font-medium cursor-default"
+              }
+              // Renaming a document is owner-only per spec §24.
+              onClick={() => doc.permission === "owner" && setEditingTitle(true)}
             >
               {doc.title}
             </button>

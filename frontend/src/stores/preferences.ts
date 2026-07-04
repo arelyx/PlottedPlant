@@ -11,6 +11,7 @@ interface PreferencesState {
   resolvedTheme: "light" | "dark";
   load: () => Promise<void>;
   update: (prefs: Partial<Preferences>) => Promise<void>;
+  reset: () => void;
 }
 
 const DEFAULTS: Preferences = {
@@ -67,5 +68,14 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       applyTheme(oldResolved);
       set({ preferences: current, resolvedTheme: oldResolved });
     }
+  },
+
+  // Clear back to defaults on logout so the next user doesn't inherit the
+  // previous user's preferences from this module-singleton store. The next
+  // load() repopulates them for the new session.
+  reset: () => {
+    const resolved = resolveTheme(DEFAULTS.theme);
+    applyTheme(resolved);
+    set({ preferences: DEFAULTS, isLoaded: false, resolvedTheme: resolved });
   },
 }));
