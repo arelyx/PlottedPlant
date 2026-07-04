@@ -9,6 +9,13 @@ interface SyncResponse {
   version_number?: number;
 }
 
+// Backoff between session-end persist retries (transient backend restarts).
+const SESSION_END_RETRY_DELAYS_MS = [500, 1500, 3000];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function onStoreDocument({
   document,
   documentName,
@@ -32,10 +39,11 @@ export async function onStoreDocument({
     return;
   }
 
-  // Determine which editor made the last change
-  let editedByUserId: number | null = null;
-  if (meta.active_editors.size > 0) {
-    // Pick the most recently active editor
+  // Attribute the edit to the last user who actually changed the doc. This
+  // survives onDisconnect (which clears active_editors), so a non-owner's
+  // session_end version is attributed correctly rather than to the owner.
+  let editedByUserId: number | null = meta.last_editor_id;
+  if (editedByUserId === null && meta.active_editors.size > 0) {
     let latestTime = 0;
     for (const [userId, info] of meta.active_editors) {
       if (info.connected_at > latestTime) {
@@ -50,34 +58,53 @@ export async function onStoreDocument({
   const endpoint = isSessionEnd
     ? `/documents/${documentName}/session-end`
     : `/documents/${documentName}/sync`;
-  const method = "POST";
 
-  try {
-    const result = await internalRequest<SyncResponse>(endpoint, {
-      method,
-      body: {
-        content: currentText,
-        edited_by_user_id: editedByUserId,
-      },
-    });
+  // A mid-session store failure is retried on the next debounce (the hash is
+  // left unchanged). The session-ending store has no next cycle — Hocuspocus
+  // destroys the ephemeral Y.Doc right after — so retry it in-hook before
+  // giving up, then rethrow so the failure is surfaced rather than swallowed.
+  const attempts = isSessionEnd ? SESSION_END_RETRY_DELAYS_MS.length + 1 : 1;
+  let lastErr: unknown;
 
-    // Update meta on success
-    meta.last_persisted_hash = currentHash;
-    meta.last_persisted_at = Date.now();
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const result = await internalRequest<SyncResponse>(endpoint, {
+        method: "POST",
+        body: { content: currentText, edited_by_user_id: editedByUserId },
+      });
 
-    if (result.version_created) {
-      logger.info(
-        `Document ${documentName}: ${isSessionEnd ? "session_end" : "auto"} version ${result.version_number} created`,
+      // Update meta only on success
+      meta.last_persisted_hash = currentHash;
+      meta.last_persisted_at = Date.now();
+      if (isSessionEnd) meta.is_session_ending = false;
+
+      if (result.version_created) {
+        logger.info(
+          `Document ${documentName}: ${isSessionEnd ? "session_end" : "auto"} version ${result.version_number} created`,
+        );
+      } else {
+        logger.debug(`Document ${documentName}: persisted (no new version)`);
+      }
+      return;
+    } catch (err) {
+      lastErr = err;
+      logger.error(
+        `Failed to persist document ${documentName} (attempt ${attempt}/${attempts}):`,
+        err,
       );
-    } else {
-      logger.debug(`Document ${documentName}: persisted (no new version)`);
+      if (attempt < attempts) {
+        await sleep(SESSION_END_RETRY_DELAYS_MS[attempt - 1]);
+      }
     }
-  } catch (err) {
-    // On failure, hash is NOT updated → next cycle will retry
-    logger.error(`Failed to persist document ${documentName}:`, err);
   }
 
+  // All attempts failed. Leave last_persisted_hash and is_session_ending
+  // untouched. For a session end, rethrow so Hocuspocus records the failure
+  // instead of silently unloading unsaved edits.
   if (isSessionEnd) {
-    meta.is_session_ending = false;
+    logger.error(
+      `Document ${documentName}: session-end persist failed after ${attempts} attempts — edits may be lost`,
+    );
+    throw lastErr;
   }
 }

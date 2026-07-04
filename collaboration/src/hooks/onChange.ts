@@ -13,18 +13,24 @@ export async function onChange({
     is_readonly?: boolean;
   } | undefined;
 
-  // Reject writes from viewers (server-side enforcement)
+  // Viewer write gating is enforced by connection.readOnly (set in
+  // onAuthenticate): Hocuspocus drops sync/update messages from readonly
+  // connections before they are ever applied, so onChange never fires for a
+  // viewer. Throwing here would be too late (the update is already applied and
+  // broadcast) and would only close the connection — so this is a defensive
+  // no-op, not the security boundary.
   if (ctx?.is_readonly) {
     logger.warn(
-      `Viewer ${ctx.user_id} attempted to modify document ${documentName}, rejecting`,
+      `onChange fired for readonly user ${ctx.user_id} on ${documentName} — unexpected; connection.readOnly should have blocked it`,
     );
-    throw new Error("Read-only access");
+    return;
   }
 
   // Track editor activity for version attribution
   const meta = (document as any).meta as DocumentMeta | undefined;
   if (meta && ctx?.user_id) {
     meta.last_change_at = Date.now();
+    meta.last_editor_id = ctx.user_id;
     meta.active_editors.set(ctx.user_id, {
       display_name: ctx.display_name || "Unknown",
       connected_at: Date.now(),

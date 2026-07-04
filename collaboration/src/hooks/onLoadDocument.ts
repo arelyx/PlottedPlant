@@ -11,6 +11,10 @@ export interface DocumentMeta {
   last_persisted_hash: string;
   last_persisted_at: number;
   last_change_at: number | null;
+  // The user whose edit most recently mutated the doc. Unlike active_editors,
+  // this survives onDisconnect so the final session_end version is attributed
+  // to the real last editor rather than falling back to the document owner.
+  last_editor_id: number | null;
   active_editors: Map<number, { display_name: string; connected_at: number }>;
   active_viewers: Map<number, { display_name: string; connected_at: number }>;
   is_session_ending: boolean;
@@ -46,6 +50,7 @@ export async function onLoadDocument({
     last_persisted_hash: sha256(plainText),
     last_persisted_at: Date.now(),
     last_change_at: null,
+    last_editor_id: null,
     active_editors: new Map(),
     active_viewers: new Map(),
     is_session_ending: false,
