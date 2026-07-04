@@ -18,6 +18,9 @@ export interface DocumentMeta {
   active_editors: Map<number, { display_name: string; connected_at: number }>;
   active_viewers: Map<number, { display_name: string; connected_at: number }>;
   is_session_ending: boolean;
+  // Set by close-room when the document is being deleted, so the disconnect
+  // cascade doesn't persist a session_end version for a row that's gone.
+  skip_persist: boolean;
 }
 
 export async function onLoadDocument({
@@ -54,6 +57,7 @@ export async function onLoadDocument({
     active_editors: new Map(),
     active_viewers: new Map(),
     is_session_ending: false,
+    skip_persist: false,
   };
   (document as any).meta = meta;
 

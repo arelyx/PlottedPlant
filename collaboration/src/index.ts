@@ -172,6 +172,11 @@ app.post("/internal/documents/:id/close-room", (req, res) => {
   // Get connection count before closing
   const count = doc.getConnectionsCount();
 
+  // Mark the doc so the disconnect cascade's final store is a no-op — the
+  // document is being deleted, so there's nothing to persist.
+  const meta = (doc as any).meta;
+  if (meta) meta.skip_persist = true;
+
   try {
     hocuspocus.closeConnections(documentId);
   } catch (err) {
