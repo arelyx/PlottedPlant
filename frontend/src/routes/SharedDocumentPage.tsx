@@ -25,14 +25,8 @@ import { useAuthStore } from "@/stores/auth";
 
 async function renderSvg(source: string): Promise<{ svg?: string; error?: string }> {
   try {
-    const response = await fetch("/api/v1/render/svg", {
+    const response = await api.requestRaw("/render/svg", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(api.getAccessToken()
-          ? { Authorization: `Bearer ${api.getAccessToken()}` }
-          : {}),
-      },
       body: JSON.stringify({ source }),
     });
     if (!response.ok) return { error: "Render failed" };
@@ -133,18 +127,10 @@ export function SharedDocumentPage() {
   const handleExportPng = async () => {
     if (!content || !data) return;
     try {
-      const response = await fetch("/api/v1/render/png", {
+      const blob = await api.requestBlob("/render/png", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(api.getAccessToken()
-            ? { Authorization: `Bearer ${api.getAccessToken()}` }
-            : {}),
-        },
         body: JSON.stringify({ source: content }),
       });
-      if (!response.ok) return;
-      const blob = await response.blob();
       downloadBlob(blob, `${data.document.title}.png`);
     } catch {
       // silently fail
