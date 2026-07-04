@@ -51,14 +51,8 @@ async function renderSvg(
   source: string,
 ): Promise<{ svg?: string; error?: RenderError }> {
   try {
-    const response = await fetch("/api/v1/render/svg", {
+    const response = await api.requestRaw("/render/svg", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(api.getAccessToken()
-          ? { Authorization: `Bearer ${api.getAccessToken()}` }
-          : {}),
-      },
       body: JSON.stringify({ source }),
     });
 
@@ -81,14 +75,8 @@ async function checkSyntax(
   source: string,
 ): Promise<{ valid: boolean; error?: RenderError }> {
   try {
-    const response = await fetch("/api/v1/render/check", {
+    const response = await api.requestRaw("/render/check", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(api.getAccessToken()
-          ? { Authorization: `Bearer ${api.getAccessToken()}` }
-          : {}),
-      },
       body: JSON.stringify({ source }),
     });
     if (!response.ok) return { valid: true };
@@ -283,18 +271,10 @@ export function LandingPage() {
     const source = contentRef.current;
     if (!source) return;
     try {
-      const response = await fetch("/api/v1/render/png", {
+      const blob = await api.requestBlob("/render/png", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(api.getAccessToken()
-            ? { Authorization: `Bearer ${api.getAccessToken()}` }
-            : {}),
-        },
         body: JSON.stringify({ source }),
       });
-      if (!response.ok) return;
-      const blob = await response.blob();
       downloadBlob(blob, `${exportFilename}.png`);
     } catch {
       // silently fail

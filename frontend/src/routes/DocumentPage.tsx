@@ -53,12 +53,8 @@ type ViewMode = "split" | "editor" | "preview";
 
 async function renderSvg(source: string): Promise<{ svg?: string; error?: RenderError }> {
   try {
-    const response = await fetch("/api/v1/render/svg", {
+    const response = await api.requestRaw("/render/svg", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${api.getAccessToken()}`,
-      },
       body: JSON.stringify({ source }),
     });
 
@@ -379,18 +375,10 @@ export function DocumentPage() {
     const source = contentRef.current;
     if (!source) return;
     try {
-      const response = await fetch("/api/v1/render/png", {
+      const blob = await api.requestBlob("/render/png", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(api.getAccessToken()
-            ? { Authorization: `Bearer ${api.getAccessToken()}` }
-            : {}),
-        },
         body: JSON.stringify({ source }),
       });
-      if (!response.ok) return;
-      const blob = await response.blob();
       downloadBlob(blob, `${doc?.title || "diagram"}.png`);
     } catch {
       // silently fail

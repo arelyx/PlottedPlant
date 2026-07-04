@@ -27,9 +27,18 @@ class ApiClient {
     this.onAuthFailure?.();
   }
 
-  async request<T>(path: string, options: ApiOptions = {}): Promise<T> {
-    const { skipAuth, ...fetchOptions } = options;
-
+  /**
+   * Core fetch with auth-header injection and 401→refresh→retry. Returns the
+   * Response WITHOUT throwing on non-OK statuses (callers that need to inspect
+   * e.g. 422 handle it themselves); only a dead session throws. This is the
+   * single place token handling lives — raw fetches that bypassed it sent
+   * "Bearer null" and never refreshed.
+   */
+  private async fetchWithAuth(
+    path: string,
+    fetchOptions: RequestInit,
+    skipAuth: boolean,
+  ): Promise<Response> {
     const headers = new Headers(fetchOptions.headers);
     if (!headers.has("Content-Type") && fetchOptions.body) {
       headers.set("Content-Type", "application/json");
@@ -48,18 +57,12 @@ class ApiClient {
     if (response.status === 401 && !skipAuth && !path.includes("/auth/refresh")) {
       const refreshed = await this.tryRefresh();
       if (refreshed) {
-        // Retry original request with new token
         headers.set("Authorization", `Bearer ${this.accessToken}`);
-        const retryResponse = await fetch(`${API_BASE}${path}`, {
+        return fetch(`${API_BASE}${path}`, {
           ...fetchOptions,
           headers,
           credentials: "include",
         });
-        if (!retryResponse.ok) {
-          throw await this.buildError(retryResponse);
-        }
-        if (retryResponse.status === 204) return undefined as T;
-        return retryResponse.json();
       }
       // Refresh failed: the session is dead. Clear it and notify the app so it
       // can redirect to login instead of appearing logged in while every
@@ -68,12 +71,33 @@ class ApiClient {
       throw await this.buildError(response);
     }
 
-    if (!response.ok) {
-      throw await this.buildError(response);
-    }
+    return response;
+  }
 
+  async request<T>(path: string, options: ApiOptions = {}): Promise<T> {
+    const { skipAuth, ...fetchOptions } = options;
+    const response = await this.fetchWithAuth(path, fetchOptions, !!skipAuth);
+    if (!response.ok) throw await this.buildError(response);
     if (response.status === 204) return undefined as T;
     return response.json();
+  }
+
+  /** Like request(), but returns the response body as a Blob (e.g. PNG export). */
+  async requestBlob(path: string, options: ApiOptions = {}): Promise<Blob> {
+    const { skipAuth, ...fetchOptions } = options;
+    const response = await this.fetchWithAuth(path, fetchOptions, !!skipAuth);
+    if (!response.ok) throw await this.buildError(response);
+    return response.blob();
+  }
+
+  /**
+   * Auth + 401-refresh, returning the raw Response without throwing on non-OK.
+   * For callers that must inspect specific statuses (e.g. render's 422 syntax
+   * error) while still getting proper token handling.
+   */
+  async requestRaw(path: string, options: ApiOptions = {}): Promise<Response> {
+    const { skipAuth, ...fetchOptions } = options;
+    return this.fetchWithAuth(path, fetchOptions, !!skipAuth);
   }
 
   async tryRefresh(): Promise<boolean> {
