@@ -7,6 +7,7 @@ interface ApiOptions extends RequestInit {
 class ApiClient {
   private accessToken: string | null = null;
   private refreshPromise: Promise<boolean> | null = null;
+  private onAuthFailure: (() => void) | null = null;
 
   setAccessToken(token: string | null) {
     this.accessToken = token;
@@ -14,6 +15,16 @@ class ApiClient {
 
   getAccessToken(): string | null {
     return this.accessToken;
+  }
+
+  /** Register a callback invoked when a session can no longer be refreshed. */
+  setOnAuthFailure(cb: (() => void) | null) {
+    this.onAuthFailure = cb;
+  }
+
+  private handleAuthFailure() {
+    this.accessToken = null;
+    this.onAuthFailure?.();
   }
 
   async request<T>(path: string, options: ApiOptions = {}): Promise<T> {
@@ -50,6 +61,10 @@ class ApiClient {
         if (retryResponse.status === 204) return undefined as T;
         return retryResponse.json();
       }
+      // Refresh failed: the session is dead. Clear it and notify the app so it
+      // can redirect to login instead of appearing logged in while every
+      // request silently 401s.
+      this.handleAuthFailure();
       throw await this.buildError(response);
     }
 
@@ -61,8 +76,11 @@ class ApiClient {
     return response.json();
   }
 
-  private async tryRefresh(): Promise<boolean> {
-    // Deduplicate concurrent refresh attempts
+  async tryRefresh(): Promise<boolean> {
+    // Deduplicate concurrent refresh attempts (multiple 401s, app boot, and
+    // multiple tabs all share this single in-flight promise so only one
+    // /auth/refresh runs — presenting an already-rotated token would trip the
+    // backend's reuse detection and revoke the whole family).
     if (this.refreshPromise) return this.refreshPromise;
 
     this.refreshPromise = (async () => {

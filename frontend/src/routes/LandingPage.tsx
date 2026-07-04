@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/stores/auth";
 import { api } from "@/lib/api";
+import { sanitizeSvg } from "@/lib/sanitize";
 import { PitchModal } from "@/components/PitchModal";
 
 // --- Types ---
@@ -530,7 +531,7 @@ export function LandingPage() {
                           transformOrigin: "top left",
                         }}
                         dangerouslySetInnerHTML={{
-                          __html: svgContent || lastGoodSvg || "",
+                          __html: sanitizeSvg(svgContent || lastGoodSvg || ""),
                         }}
                       />
                       {!svgContent && !lastGoodSvg && !rendering && (

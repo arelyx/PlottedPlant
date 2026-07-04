@@ -29,7 +29,7 @@ interface AuthState {
   initialize: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isLoading: false,
   isInitialized: false,
@@ -78,42 +78,37 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   refreshToken: async () => {
-    try {
-      const data = await api.request<{
-        access_token: string;
-        expires_in: number;
-      }>("/auth/refresh", {
-        method: "POST",
-        skipAuth: true,
-      });
-      api.setAccessToken(data.access_token);
-      return true;
-    } catch {
-      api.setAccessToken(null);
-      set({ user: null });
-      return false;
-    }
+    const ok = await api.tryRefresh();
+    if (!ok) set({ user: null });
+    return ok;
   },
 
   initialize: async () => {
+    // Guard against concurrent boots (React StrictMode double-invokes effects,
+    // multiple tabs). The refresh itself is deduplicated in the api client, but
+    // this avoids a redundant second /users/me fetch.
+    if (get().isLoading || get().isInitialized) return;
     set({ isLoading: true });
-    try {
-      // Try to refresh the token (uses HTTP-only cookie)
-      const data = await api.request<{
-        access_token: string;
-        expires_in: number;
-      }>("/auth/refresh", {
-        method: "POST",
-        skipAuth: true,
-      });
-      api.setAccessToken(data.access_token);
 
-      // Fetch user profile
+    // Refresh via the deduplicated api-client path so two concurrent boots
+    // don't each present the cookie and trip the backend's reuse detection.
+    const refreshed = await api.tryRefresh();
+    if (!refreshed) {
+      set({ user: null, isInitialized: true, isLoading: false });
+      return;
+    }
+
+    try {
       const user = await api.request<User>("/users/me");
       set({ user, isInitialized: true, isLoading: false });
     } catch {
-      api.setAccessToken(null);
       set({ user: null, isInitialized: true, isLoading: false });
     }
   },
 }));
+
+// When a request can't refresh the session, clear auth state so route guards
+// redirect to login instead of leaving the app apparently signed in.
+api.setOnAuthFailure(() => {
+  useAuthStore.setState({ user: null });
+});
