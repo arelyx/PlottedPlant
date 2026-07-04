@@ -21,11 +21,14 @@ services:
       - ./frontend/dist/:/usr/share/nginx/html/:ro
     networks:
       - frontend_net
+    # service_started, not service_healthy: nginx serves the static frontend and
+    # proxies /api and /collaboration. A crash-looping backend should degrade to
+    # 502s on those routes, not prevent nginx (and the whole site) from starting.
     depends_on:
       backend:
-        condition: service_healthy
+        condition: service_started
       collaboration:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
@@ -42,8 +45,10 @@ services:
       dockerfile: Dockerfile
     container_name: plantuml-backend
     restart: unless-stopped
-    env_file:
-      - .env
+    # No env_file: the explicit environment block below already interpolates
+    # every setting the app reads. Loading the whole .env would additionally
+    # hand the backend the backup-encryption and S3 keys — the exact secrets
+    # meant to survive a backend compromise.
     environment:
       - APP_ENV=production
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}

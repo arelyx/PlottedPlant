@@ -1,9 +1,13 @@
 #!/bin/bash
 # scripts/backup.sh — Automated PostgreSQL backup with optional encryption and S3 upload
-# Run via cron every 6 hours:
-#   0 */6 * * * cd /home/arelyx/PlottedPlant && source .env && ./scripts/backup.sh >> /var/log/plantuml-backup.log 2>&1
+# Run via cron every 6 hours (cron uses /bin/sh, which has no `source` builtin —
+# use the POSIX dot, or set SHELL=/bin/bash in the crontab):
+#   0 */6 * * * cd /home/arelyx/PlottedPlant && . ./.env && ./scripts/backup.sh >> /var/log/plantuml-backup.log 2>&1
 
 set -euo pipefail
+
+# Pin the compose file so cron/manual runs never merge docker-compose.dev.yml.
+COMPOSE="docker compose -f docker-compose.yml"
 
 # ─── Validate required variables ───
 if [ -z "${POSTGRES_USER:-}" ] || [ -z "${POSTGRES_DB:-}" ]; then
@@ -32,7 +36,7 @@ mkdir -p "${BACKUP_DIR}"
 # Dump database with zstd compression
 # --clean: include DROP statements so restore works on a non-empty database
 # --if-exists: don't error on DROP if objects don't exist (fresh database)
-docker compose exec -T postgres pg_dump \
+$COMPOSE exec -T postgres pg_dump \
   -U "${POSTGRES_USER}" \
   -d "${POSTGRES_DB}" \
   --format=plain \

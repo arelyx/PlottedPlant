@@ -22,6 +22,9 @@ dist/
 # Docker
 postgres_data/
 
+# Local database backups (may contain plaintext dumps)
+backups/
+
 # OS
 .DS_Store
 Thumbs.db

@@ -1,6 +1,9 @@
-# docker-compose.override.yml
-# Automatically merged with docker-compose.yml during `docker compose up`
-# Development-only overrides
+# docker-compose.dev.yml
+# Development-only overrides. NOT auto-merged — opt in explicitly:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# (Renamed from docker-compose.override.yml so a bare `docker compose` on the
+# production host can never pull in dev settings like APP_ENV=development or
+# published database ports.)
 
 services:
 
