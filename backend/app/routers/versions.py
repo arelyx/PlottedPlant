@@ -1,4 +1,3 @@
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -61,20 +60,25 @@ async def list_versions(
     if permission == "viewer":
         raise HTTPException(status_code=403, detail="Viewers cannot access version history")
 
+    # Paginate on version_number, which is strictly monotonic per document.
+    # created_at is transaction-start time, so versions written in one
+    # transaction (e.g. restore's pre+post pair) share a timestamp — a
+    # created_at cursor with a strict `<` would skip one at a page boundary and
+    # order them nondeterministically.
     query = (
         select(DocumentVersion)
         .where(DocumentVersion.document_id == doc.id)
-        .order_by(DocumentVersion.created_at.desc())
+        .order_by(DocumentVersion.version_number.desc())
     )
 
     if source:
         query = query.where(DocumentVersion.source == source)
     if cursor:
         try:
-            cursor_dt = datetime.fromisoformat(cursor)
-            query = query.where(DocumentVersion.created_at < cursor_dt)
+            cursor_version = int(cursor)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid cursor format")
+        query = query.where(DocumentVersion.version_number < cursor_version)
 
     # Fetch one extra to detect has_more
     query = query.limit(limit + 1)
@@ -98,7 +102,7 @@ async def list_versions(
             )
         )
 
-    next_cursor = versions[-1].created_at.isoformat() if has_more else None
+    next_cursor = str(versions[-1].version_number) if has_more else None
 
     return VersionListResponse(items=items, next_cursor=next_cursor, has_more=has_more)
 

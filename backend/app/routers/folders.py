@@ -157,7 +157,7 @@ async def get_folder(
             if user_brief:
                 last_edited = {"id": user_brief["id"], "display_name": user_brief["display_name"]}
         doc_items.append({
-            "id": doc.id,
+            "id": str(doc.public_id),
             "title": doc.title,
             "updated_at": doc.updated_at,
             "last_edited_by": last_edited,

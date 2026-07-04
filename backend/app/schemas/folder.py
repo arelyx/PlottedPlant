@@ -11,7 +11,7 @@ class UserBrief(BaseModel):
 
 
 class DocumentInFolder(BaseModel):
-    id: int
+    id: str  # document public_id (UUID), matching the document endpoints
     title: str
     updated_at: datetime
     last_edited_by: UserBrief | None = None

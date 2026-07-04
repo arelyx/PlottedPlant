@@ -1,7 +1,6 @@
 from datetime import datetime
-from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field
 
 
 # --- Shared sub-models ---
@@ -31,24 +30,16 @@ class DocumentCreateRequest(BaseModel):
     template_id: int | None = None
 
 
-_UNSET = object()
-
-
 class DocumentUpdateRequest(BaseModel):
     title: str | None = Field(default=None, max_length=255)
-    folder_id: int | None | Any = _UNSET  # _UNSET means not provided; None means move to root
-
-    @model_validator(mode="before")
-    @classmethod
-    def track_folder_id(cls, data: Any) -> Any:
-        """Distinguish between folder_id not sent vs folder_id: null."""
-        if isinstance(data, dict) and "folder_id" not in data:
-            data["folder_id"] = _UNSET
-        return data
+    # None means "move to root"; absent means "leave unchanged" — distinguished
+    # via model_fields_set below rather than a sentinel typed as Any, which
+    # accepted any JSON value (e.g. a string) and 500'd downstream.
+    folder_id: int | None = None
 
     @property
     def folder_id_provided(self) -> bool:
-        return self.folder_id is not _UNSET
+        return "folder_id" in self.model_fields_set
 
 
 class DocumentContentUpdateRequest(BaseModel):

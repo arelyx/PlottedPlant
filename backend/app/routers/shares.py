@@ -1,5 +1,8 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user_id, get_db, parse_document_uuid
@@ -175,7 +178,15 @@ async def create_document_share(
         shared_by_id=user_id,
     )
     db.add(share)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Lost a race with a concurrent identical share (double-click).
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "ALREADY_SHARED", "message": "Already shared with this user. Use PATCH to update."},
+        )
     await db.refresh(share)
 
     share_user = ShareUser(
@@ -360,7 +371,15 @@ async def create_folder_share(
         shared_by_id=user_id,
     )
     db.add(share)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Lost a race with a concurrent identical share (double-click).
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "ALREADY_SHARED", "message": "Already shared with this user. Use PATCH to update."},
+        )
     await db.refresh(share)
 
     share_user = ShareUser(
@@ -495,7 +514,21 @@ async def create_document_public_link(
         created_by_id=user_id,
     )
     db.add(link)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Concurrent create of the per-document link — fetch and return it
+        # (the public link is idempotent per document).
+        await db.rollback()
+        existing_result = await db.execute(
+            select(PublicShareLink).where(PublicShareLink.document_id == internal_id)
+        )
+        link = existing_result.scalar_one()
+        if not link.is_active:
+            link.is_active = True
+            await db.commit()
+        await db.refresh(link)
+        return _build_public_link_response(link)
     await db.refresh(link)
     return _build_public_link_response(link)
 
@@ -537,9 +570,16 @@ async def access_public_link(
     db: AsyncSession = Depends(get_db),
 ):
     """Access a resource via a public share link. No authentication required."""
+    # The token column is a UUID; comparing a non-UUID string raises a driver
+    # DataError (500) on this unauthenticated endpoint. Reject early as 404.
+    try:
+        token_uuid = uuid.UUID(token)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Link not found or has been revoked")
+
     result = await db.execute(
         select(PublicShareLink).where(
-            PublicShareLink.token == token,
+            PublicShareLink.token == token_uuid,
             PublicShareLink.is_active.is_(True),
         )
     )
