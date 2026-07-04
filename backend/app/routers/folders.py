@@ -14,6 +14,7 @@ from app.schemas.folder import (
     FolderResponse,
     FolderUpdateRequest,
 )
+from app.services.collaboration import notify_close_room
 from app.services.document import is_folder_shared, resolve_folder_permission
 
 router = APIRouter(prefix="/api/v1/folders", tags=["folders"])
@@ -222,6 +223,16 @@ async def delete_folder(
             status_code=403,
             detail={"code": "OWNER_ONLY", "message": "Only the owner can delete this folder."},
         )
+
+    # Close any active collaboration rooms for documents in this folder before
+    # deleting them, mirroring delete_document. Otherwise connected editors keep
+    # a live Y.Doc session against a row that no longer exists and their edits
+    # are silently discarded on every flush.
+    doc_ids = await db.execute(
+        select(Document.public_id).where(Document.folder_id == folder_id)
+    )
+    for (public_id,) in doc_ids.all():
+        await notify_close_room(str(public_id))
 
     result = await db.execute(select(Folder).where(Folder.id == folder_id))
     folder = result.scalar_one()

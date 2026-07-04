@@ -1,7 +1,11 @@
 """Client for calling the Hocuspocus internal command endpoints."""
 
+import logging
+
 import httpx
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 async def notify_force_content(
@@ -29,8 +33,11 @@ async def notify_force_content(
             if response.status_code == 200:
                 data = response.json()
                 return data.get("active", False)
+            logger.warning(
+                "force-content for %s returned %s", document_id, response.status_code
+            )
     except Exception:
-        pass
+        logger.warning("force-content notify failed for %s", document_id, exc_info=True)
     return False
 
 
@@ -50,6 +57,9 @@ async def notify_close_room(document_id: str) -> bool:
             if response.status_code == 200:
                 data = response.json()
                 return data.get("active", False)
+            logger.warning(
+                "close-room for %s returned %s", document_id, response.status_code
+            )
     except Exception:
-        pass
+        logger.warning("close-room notify failed for %s", document_id, exc_info=True)
     return False

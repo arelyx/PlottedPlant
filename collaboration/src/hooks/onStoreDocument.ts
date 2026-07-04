@@ -26,6 +26,13 @@ export async function onStoreDocument({
     return;
   }
 
+  // The document is being deleted (close-room set this). Persisting now would
+  // recreate content for a row that's gone, so skip entirely.
+  if (meta.skip_persist) {
+    logger.debug(`Document ${documentName}: skip_persist set, not persisting`);
+    return;
+  }
+
   const ytext = document.getText("monaco");
   const currentText = ytext.toString();
   const currentHash = sha256(currentText);
