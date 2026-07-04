@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.dependencies import get_current_user_id, get_db, parse_document_uuid
+from app.routers.render import classify_render_response
 from app.services.document import get_document_with_permission, resolve_document_internal_id
 
 logger = logging.getLogger(__name__)
@@ -26,14 +27,26 @@ def _slugify(title: str) -> str:
 async def _render_for_export(source: str, fmt: str) -> bytes:
     """Render PlantUML source via the internal server."""
     url = f"{settings.plantuml_server_url}/{fmt}/"
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            url,
-            content=source.encode("utf-8"),
-            headers={"Content-Type": "text/plain; charset=utf-8"},
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                url,
+                content=source.encode("utf-8"),
+                headers={"Content-Type": "text/plain; charset=utf-8"},
+            )
+    except httpx.RequestError as e:
+        logger.error("PlantUML server request failed: %s", e)
+        raise HTTPException(status_code=502, detail="PlantUML server unavailable")
+
+    # A syntax error in the document is a client error (422), not a gateway
+    # failure. classify_render_response raises 502 only for a genuine upstream
+    # problem (non-image error body); a bad diagram returns a syntax-error dict.
+    error = classify_render_response(response)
+    if error:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": {"code": "PLANTUML_SYNTAX_ERROR", **error}},
         )
-    if response.status_code != 200:
-        raise HTTPException(status_code=502, detail="PlantUML rendering failed")
     return response.content
 
 
