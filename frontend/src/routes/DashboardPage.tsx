@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,29 +73,56 @@ export function DashboardPage() {
     name: string;
   } | null>(null);
 
-  const refresh = useCallback(async () => {
+  // Debounce the search box so we issue one request after typing settles,
+  // not one per keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Monotonic request id: a slow response for "ab" must not overwrite the
+  // newer response for "abc".
+  const docsReqIdRef = useRef(0);
+
+  const loadFolders = useCallback(async () => {
+    try {
+      const res = await listFolders();
+      setFolders(res.items);
+    } catch (err) {
+      console.error("Failed to load folders:", err);
+    }
+  }, []);
+
+  const loadDocuments = useCallback(async () => {
+    const reqId = ++docsReqIdRef.current;
     setLoading(true);
     try {
-      const [foldersRes, docsRes] = await Promise.all([
-        listFolders(),
-        listDocuments(
-          activeFolderId !== null
-            ? { folder_id: String(activeFolderId), search: search || undefined }
-            : { search: search || undefined }
-        ),
-      ]);
-      setFolders(foldersRes.items);
-      setDocuments(docsRes.items);
+      const docsRes = await listDocuments(
+        activeFolderId !== null
+          ? { folder_id: String(activeFolderId), search: debouncedSearch || undefined }
+          : { search: debouncedSearch || undefined }
+      );
+      if (reqId === docsReqIdRef.current) setDocuments(docsRes.items);
     } catch (err) {
-      console.error("Failed to load data:", err);
+      console.error("Failed to load documents:", err);
     } finally {
-      setLoading(false);
+      if (reqId === docsReqIdRef.current) setLoading(false);
     }
-  }, [activeFolderId, search]);
+  }, [activeFolderId, debouncedSearch]);
+
+  const refresh = useCallback(async () => {
+    await Promise.all([loadFolders(), loadDocuments()]);
+  }, [loadFolders, loadDocuments]);
+
+  // Folders don't change with the search box, so load them independently of it.
+  useEffect(() => {
+    loadFolders();
+  }, [loadFolders]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    loadDocuments();
+  }, [loadDocuments]);
 
   // --- Actions ---
 
@@ -153,7 +180,13 @@ export function DashboardPage() {
 
   // --- Filtered data ---
 
-  const standaloneDocuments = documents.filter((d) => d.folder === null);
+  // At the root, a search is global — the backend returns matches from inside
+  // folders too, so show all of them instead of hiding non-standalone hits.
+  const isSearching = debouncedSearch.trim().length > 0;
+  const standaloneDocuments =
+    !activeFolderId && isSearching
+      ? documents
+      : documents.filter((d) => d.folder === null);
   const folderDocuments = activeFolderId
     ? documents.filter((d) => d.folder?.id === activeFolderId)
     : [];
