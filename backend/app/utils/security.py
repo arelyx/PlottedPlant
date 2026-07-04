@@ -9,6 +9,11 @@ from app.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# Bind tokens to this app so a shared jwt_secret_key can't mint/accept tokens
+# interchangeable with another service.
+JWT_ISSUER = "plottedplant"
+JWT_AUDIENCE = "plottedplant-api"
+
 
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
@@ -48,6 +53,8 @@ def create_access_token(user_id: int) -> tuple[str, int]:
         "exp": expire,
         "iat": datetime.now(timezone.utc),
         "type": "access",
+        "iss": JWT_ISSUER,
+        "aud": JWT_AUDIENCE,
     }
     token = jwt.encode(payload, settings.jwt_secret_key, algorithm="HS256")
     return token, expires_in
@@ -56,7 +63,13 @@ def create_access_token(user_id: int) -> tuple[str, int]:
 def decode_access_token(token: str) -> dict | None:
     """Decode and validate a JWT access token. Returns payload or None."""
     try:
-        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=["HS256"])
+        payload = jwt.decode(
+            token,
+            settings.jwt_secret_key,
+            algorithms=["HS256"],
+            audience=JWT_AUDIENCE,
+            issuer=JWT_ISSUER,
+        )
         if payload.get("type") != "access":
             return None
         return payload

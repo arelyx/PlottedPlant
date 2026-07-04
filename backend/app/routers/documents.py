@@ -8,6 +8,7 @@ from app.models.document_share import DocumentShare
 from app.services.collaboration import notify_close_room
 from app.models.folder import Folder
 from app.models.folder_share import FolderShare
+from app.models.public_share_link import PublicShareLink
 from app.models.user import User
 from app.schemas.document import (
     ContentUpdateResponse,
@@ -121,9 +122,11 @@ async def list_documents(
             raise HTTPException(status_code=400, detail="Invalid folder_id")
         query = query.where(Document.folder_id == fid)
 
-    # Search filter
+    # Search filter — escape LIKE wildcards so a literal % or _ in the query
+    # matches literally instead of acting as a wildcard.
     if search:
-        query = query.where(Document.title.ilike(f"%{search}%"))
+        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        query = query.where(Document.title.ilike(f"%{escaped}%", escape="\\"))
 
     # Count total before pagination
     count_query = select(func.count()).select_from(query.subquery())
@@ -175,6 +178,16 @@ async def list_documents(
             ).distinct()
         )
         shared_doc_ids.update(r[0] for r in ds_result.all())
+        # Also count an active public link as "shared", matching get_document's
+        # is_document_shared — otherwise a publicly-linked doc reads as private
+        # in the list, hiding a security-relevant signal from its owner.
+        pl_result = await db.execute(
+            select(PublicShareLink.document_id).where(
+                PublicShareLink.document_id.in_(doc_ids),
+                PublicShareLink.is_active.is_(True),
+            ).distinct()
+        )
+        shared_doc_ids.update(r[0] for r in pl_result.all())
 
     items = []
     for doc, perm, shared_by_id in rows:
