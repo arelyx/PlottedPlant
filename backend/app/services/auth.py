@@ -50,17 +50,18 @@ async def create_user(
 
 
 async def create_refresh_token(db: AsyncSession, user_id: int) -> str:
-    """Create a refresh token. Returns the raw token (for the cookie)."""
+    """Create a refresh token for a NEW session. Returns the raw token."""
     raw_token = generate_token()
     token_hash = hash_token(raw_token)
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        days=settings.jwt_refresh_token_expire_days
-    )
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(days=settings.jwt_refresh_token_expire_days)
+    session_expires_at = now + timedelta(days=settings.jwt_session_absolute_expire_days)
 
     refresh = RefreshToken(
         user_id=user_id,
         token_hash=token_hash,
         expires_at=expires_at,
+        session_expires_at=session_expires_at,
     )
     db.add(refresh)
     await db.flush()
@@ -89,7 +90,10 @@ async def rotate_refresh_token(db: AsyncSession, raw_token: str) -> tuple[User, 
         .where(RefreshToken.revoked_at.is_(None))
         .values(revoked_at=now)
         .returning(
-            RefreshToken.id, RefreshToken.user_id, RefreshToken.expires_at
+            RefreshToken.id,
+            RefreshToken.user_id,
+            RefreshToken.expires_at,
+            RefreshToken.session_expires_at,
         )
     )
     row = claim.first()
@@ -111,23 +115,30 @@ async def rotate_refresh_token(db: AsyncSession, raw_token: str) -> tuple[User, 
             await db.commit()
         return None
 
-    old_id, user_id, expires_at = row.id, row.user_id, row.expires_at
+    old_id, user_id = row.id, row.user_id
+    expires_at, session_expires_at = row.expires_at, row.session_expires_at
 
-    # The token was active but past its TTL. It's now revoked (harmless); an
-    # expired token must not rotate.
-    if expires_at < now:
+    # The token was active but past its per-token TTL, or the whole session has
+    # hit its absolute cap. Either way it's now revoked; don't rotate. The
+    # absolute cap stops a session from sliding forever via repeated refresh.
+    if expires_at < now or (session_expires_at is not None and session_expires_at < now):
         await db.commit()
         return None
 
-    # Mint the replacement and link the chain for forensic analysis.
+    # Mint the replacement and link the chain for forensic analysis. The new
+    # token's per-token TTL is capped at the session's absolute expiry so it
+    # can't outlive the session.
     new_raw_token = generate_token()
     new_token_hash = hash_token(new_raw_token)
     new_expires_at = now + timedelta(days=settings.jwt_refresh_token_expire_days)
+    if session_expires_at is not None and session_expires_at < new_expires_at:
+        new_expires_at = session_expires_at
 
     new_refresh = RefreshToken(
         user_id=user_id,
         token_hash=new_token_hash,
         expires_at=new_expires_at,
+        session_expires_at=session_expires_at,
     )
     db.add(new_refresh)
     await db.flush()

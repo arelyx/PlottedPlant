@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     jwt_secret_key: str
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 30
+    # Absolute lifetime of a login session regardless of rotation.
+    jwt_session_absolute_expire_days: int = 90
+    # How long revoked/expired token rows are retained before cleanup, and the
+    # interval between background maintenance sweeps.
+    token_retention_days: int = 7
+    maintenance_interval_seconds: int = 21600  # 6 hours
 
     # OAuth
     oauth_google_client_id: str = ""

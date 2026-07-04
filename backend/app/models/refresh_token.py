@@ -32,6 +32,11 @@ class RefreshToken(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Absolute end of the login session; carried unchanged through rotation so a
+    # session can't be extended indefinitely by refreshing.
+    session_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     replaced_by_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("refresh_tokens.id"), nullable=True
     )
