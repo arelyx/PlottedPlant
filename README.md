@@ -57,11 +57,17 @@ OAuth and SMTP are optional for local development.
 
 ### 2. Start all services
 
+For local development, opt into the dev overrides explicitly:
+
 ```bash
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 ```
 
-This starts all 7 containers (6 core + the Vite dev server via the override file). The first build takes a few minutes to download images and install dependencies.
+This starts all 7 containers (6 core + the Vite dev server from the dev file). The first build takes a few minutes to download images and install dependencies.
+
+> The dev overrides live in `docker-compose.dev.yml` and are **not** auto-merged
+> (it is intentionally not named `docker-compose.override.yml`), so a bare
+> `docker compose up -d` on a server runs the production configuration.
 
 ### 3. Run database migrations
 
@@ -87,7 +93,7 @@ All containers should show `healthy` status. If any are still starting, wait a m
 
 ### Development features
 
-The `docker-compose.override.yml` file is automatically applied in development and provides:
+The `docker-compose.dev.yml` file (applied via the `-f` flags above) provides:
 
 - **Hot module replacement** for the frontend (Vite dev server with HMR)
 - **Auto-reload** for the backend (uvicorn `--reload`)
@@ -154,10 +160,10 @@ docker compose logs --tail=50 backend
 
 ## Production Deployment
 
-> **Dev vs Production:** Development uses `docker compose up` which auto-merges
-> `docker-compose.override.yml` (Vite HMR, hot-reload, HTTP only). Production
-> uses `docker compose -f docker-compose.yml up` to skip the dev override and
-> serve pre-built static files behind TLS.
+> **Dev vs Production:** Development opts into `docker-compose.dev.yml` via
+> `docker compose -f docker-compose.yml -f docker-compose.dev.yml up` (Vite HMR,
+> hot-reload, HTTP only). Production uses a bare `docker compose -f
+> docker-compose.yml up` to serve pre-built static files behind TLS.
 
 ### 1. Install Docker
 
@@ -451,7 +457,7 @@ If port 80 or 443 is already in use:
 # Find what's using the port
 lsof -i :80
 
-# Or change the port mapping in docker-compose.override.yml
+# Or change the port mapping in docker-compose.dev.yml
 # ports:
 #   - "8080:80"
 ```

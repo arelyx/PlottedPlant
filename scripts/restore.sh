@@ -31,6 +31,10 @@ for cmd in docker zstd; do
   fi
 done
 
+# Pin the compose file so this never merges docker-compose.dev.yml (which would
+# recreate services with APP_ENV=development and published database ports).
+COMPOSE="docker compose -f docker-compose.yml"
+
 BACKUP_FILE="$1"
 
 if [ ! -f "${BACKUP_FILE}" ]; then
@@ -75,36 +79,36 @@ if [ "${CONFIRM}" != "yes" ]; then
 fi
 
 echo "[$(date)] Stopping application services..."
-docker compose stop backend collaboration
+$COMPOSE stop backend collaboration
 
 echo "[$(date)] Restoring database..."
-zstd -d --stdout "${RESTORE_FILE}" | docker compose exec -T postgres psql \
+# Guard the pipeline with `if !` — under `set -euo pipefail` a failing restore
+# aborts the script immediately, so the old `RESTORE_EXIT=$?` handler below was
+# unreachable and services were left stopped on failure.
+if ! zstd -d --stdout "${RESTORE_FILE}" | $COMPOSE exec -T postgres psql \
   -U "${POSTGRES_USER}" \
   -d "${POSTGRES_DB}" \
   --single-transaction \
   --set ON_ERROR_STOP=on \
-  -q
-
-RESTORE_EXIT=$?
+  -q; then
+  echo "[$(date)] Error: Database restore failed."
+  echo "The database may be in an inconsistent state. Check the output above."
+  [ -n "${TEMP_DECRYPTED}" ] && rm -f "${TEMP_DECRYPTED}"
+  echo "Restarting services..."
+  $COMPOSE up -d backend collaboration
+  exit 1
+fi
 
 # Clean up temp file
 [ -n "${TEMP_DECRYPTED}" ] && rm -f "${TEMP_DECRYPTED}"
 
-if [ $RESTORE_EXIT -ne 0 ]; then
-  echo "[$(date)] Error: Database restore failed (exit code: $RESTORE_EXIT)."
-  echo "The database may be in an inconsistent state. Check the output above."
-  echo "Restarting services..."
-  docker compose up -d backend collaboration
-  exit 1
-fi
-
 echo "[$(date)] Database restore successful."
 
 echo "[$(date)] Running migrations to ensure schema is up to date..."
-docker compose run --rm backend alembic upgrade head
+$COMPOSE run --rm backend alembic upgrade head
 
 echo "[$(date)] Restarting services..."
-docker compose up -d backend collaboration
+$COMPOSE up -d backend collaboration
 
 # Wait for services to be healthy
 echo "[$(date)] Waiting for services to become healthy..."
@@ -127,7 +131,7 @@ fi
 # Quick verification
 echo ""
 echo "=== Post-restore verification ==="
-docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -q -c \
+$COMPOSE exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -q -c \
   "SELECT 'users' as table_name, count(*) as row_count FROM users
    UNION ALL SELECT 'documents', count(*) FROM documents
    UNION ALL SELECT 'document_versions', count(*) FROM document_versions
