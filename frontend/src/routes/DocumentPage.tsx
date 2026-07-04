@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Editor, { type OnMount } from "@monaco-editor/react";
 import type * as Monaco from "monaco-editor";
+import type * as Y from "yjs";
 import { registerPlantUMLLanguage } from "@/lib/plantuml-monaco";
 import {
   Panel,
@@ -102,9 +103,14 @@ export function DocumentPage() {
   const [collaborators, setCollaborators] = useState<CollaboratorInfo[]>([]);
   const collabSessionRef = useRef<CollaborationSession | null>(null);
   const syncedRef = useRef(false);
+  // Mirror of syncedRef for rendering: the editor stays read-only until the
+  // Y.Text has synced, so keystrokes typed before the binding exists aren't
+  // silently overwritten when the server content arrives.
+  const [isSynced, setIsSynced] = useState(false);
   // Incrementing this key forces a full session recreation with a fresh Y.Doc,
   // preventing CRDT merge duplication after a WebSocket disconnect.
   const [reconnectKey, setReconnectKey] = useState(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Content ref — tracks Y.Text value for rendering and export
   const contentRef = useRef("");
@@ -124,8 +130,9 @@ export function DocumentPage() {
   // Share state
   const [showShare, setShowShare] = useState(false);
 
-  // Save status — tracks whether local changes have been persisted
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
+  // Save status — tracks whether local changes have been persisted. "offline"
+  // means a local edit couldn't be confirmed because the connection dropped.
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "offline">("saved");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const historyRefreshRef = useRef(0);
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
@@ -191,7 +198,12 @@ export function DocumentPage() {
           const model = editorRef.current.getModel();
           if (model) {
             if (!checkResult.valid && checkResult.error) {
-              const errorLine = checkResult.error.line || 1;
+              // Clamp to the model's real line range — a server-reported line
+              // past the current line count makes getLineMaxColumn throw.
+              const errorLine = Math.min(
+                Math.max(checkResult.error.line || 1, 1),
+                model.getLineCount(),
+              );
               monacoRef.current.editor.setModelMarkers(model, "plantuml", [
                 {
                   severity: monacoRef.current.MarkerSeverity.Error,
@@ -230,6 +242,7 @@ export function DocumentPage() {
     if (!doc || !authUser || !documentId) return;
 
     syncedRef.current = false;
+    setIsSynced(false);
 
     const session = createCollaborationSession(
       documentId,
@@ -244,6 +257,7 @@ export function DocumentPage() {
         },
         onSynced() {
           syncedRef.current = true;
+          setIsSynced(true);
 
           // Trigger initial render from Y.Text content
           const text = session.ytext.toString();
@@ -267,8 +281,14 @@ export function DocumentPage() {
         onDisconnectedAfterSync() {
           // The WebSocket dropped after a successful sync. The provider's
           // auto-reconnect has been cancelled to prevent CRDT duplication.
-          // Schedule a full session recreation with a fresh Y.Doc.
-          setTimeout(() => setReconnectKey((k) => k + 1), 1000);
+          // Schedule a full session recreation with a fresh Y.Doc. Track the
+          // timer so unmount (or a second disconnect) doesn't leak it or fire
+          // setState after teardown.
+          if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+          reconnectTimerRef.current = setTimeout(
+            () => setReconnectKey((k) => k + 1),
+            1000,
+          );
         },
       },
     );
@@ -277,7 +297,7 @@ export function DocumentPage() {
 
     // Observe Y.Text changes for render pipeline + save status
     let isFirstSync = true;
-    const ytextObserver = () => {
+    const ytextObserver = (_event: Y.YTextEvent, transaction: Y.Transaction) => {
       const text = session.ytext.toString();
       contentRef.current = text;
       setLineCount(text.split("\n").length);
@@ -289,11 +309,16 @@ export function DocumentPage() {
         return;
       }
 
-      // Mark as "saving" — server debounce is 2s, add margin for network
+      // Only local edits represent unsaved work. Remote edits are already the
+      // server's state, so they must not flip the indicator to "Saving..."
+      if (!transaction.local) return;
+
       setSaveStatus("saving");
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => {
-        setSaveStatus("saved");
+        // Don't claim "Saved" if the connection dropped meanwhile — the edit
+        // may never have reached the server.
+        setSaveStatus((prev) => (prev === "saving" ? "saved" : prev));
         // Bump history refresh key so panel re-fetches
         historyRefreshRef.current += 1;
         setHistoryRefreshKey(historyRefreshRef.current);
@@ -307,8 +332,17 @@ export function DocumentPage() {
       collabSessionRef.current = null;
       syncedRef.current = false;
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
     };
   }, [doc, authUser, documentId, triggerRender, reconnectKey]);
+
+  // If the connection drops while a local edit is still pending confirmation,
+  // stop showing "Saving..." and surface that the change is unsaved.
+  useEffect(() => {
+    if (connectionStatus === "disconnected") {
+      setSaveStatus((prev) => (prev === "saving" ? "offline" : prev));
+    }
+  }, [connectionStatus]);
 
   // Cleanup render timeout on unmount
   useEffect(() => {
@@ -409,6 +443,15 @@ export function DocumentPage() {
   }
 
   const isReadOnly = doc.permission === "viewer";
+  // The Monaco editor stays read-only until the collaboration session has
+  // synced, so pre-sync keystrokes aren't discarded when the server content
+  // lands. Title/permission UI still keys off isReadOnly (REST, not collab).
+  const editorReadOnly = isReadOnly || !isSynced;
+  const editorLocked = !isReadOnly && !isSynced;
+  const editorLockLabel =
+    connectionStatus === "disconnected"
+      ? "Disconnected — reconnecting…"
+      : "Connecting to collaboration session…";
 
   // Connection status indicator
   const statusLabel =
@@ -557,26 +600,33 @@ export function DocumentPage() {
             {viewMode !== "preview" && (
               <>
                 <Panel defaultSize={50} minSize={20}>
-                  <Editor
-                    height="100%"
-                    defaultValue={doc.content}
-                    language="plantuml"
-                    theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
-                    onMount={handleEditorMount}
-                    options={{
-                      readOnly: isReadOnly,
-                      minimap: { enabled: preferences.editor_minimap },
-                      fontSize: preferences.editor_font_size,
-                      lineNumbers: "on",
-                      wordWrap: preferences.editor_word_wrap ? "on" : "off",
-                      scrollBeyondLastLine: false,
-                      automaticLayout: true,
-                      tabSize: 2,
-                      renderLineHighlight: "line",
-                      bracketPairColorization: { enabled: true },
-                      padding: { top: 8 },
-                    }}
-                  />
+                  <div className="relative h-full">
+                    {editorLocked && (
+                      <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 text-xs bg-muted text-muted-foreground border px-3 py-1 rounded-full shadow-sm">
+                        {editorLockLabel}
+                      </div>
+                    )}
+                    <Editor
+                      height="100%"
+                      defaultValue={doc.content}
+                      language="plantuml"
+                      theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
+                      onMount={handleEditorMount}
+                      options={{
+                        readOnly: editorReadOnly,
+                        minimap: { enabled: preferences.editor_minimap },
+                        fontSize: preferences.editor_font_size,
+                        lineNumbers: "on",
+                        wordWrap: preferences.editor_word_wrap ? "on" : "off",
+                        scrollBeyondLastLine: false,
+                        automaticLayout: true,
+                        tabSize: 2,
+                        renderLineHighlight: "line",
+                        bracketPairColorization: { enabled: true },
+                        padding: { top: 8 },
+                      }}
+                    />
+                  </div>
                 </Panel>
                 {viewMode === "split" && (
                   <Separator className="w-1.5 bg-border hover:bg-primary/20 transition-colors" />
@@ -695,8 +745,20 @@ export function DocumentPage() {
           <span>{rendering ? "Rendering..." : `Rendered in ${renderTime}ms`}</span>
         )}
         <div className="flex items-center gap-1.5 ml-auto">
-          <span className={saveStatus === "saving" ? "text-yellow-600 dark:text-yellow-400" : "text-green-600 dark:text-green-400"}>
-            {saveStatus === "saving" ? "Saving..." : "Saved"}
+          <span
+            className={
+              saveStatus === "saving"
+                ? "text-yellow-600 dark:text-yellow-400"
+                : saveStatus === "offline"
+                  ? "text-red-600 dark:text-red-400"
+                  : "text-green-600 dark:text-green-400"
+            }
+          >
+            {saveStatus === "saving"
+              ? "Saving..."
+              : saveStatus === "offline"
+                ? "Unsaved — offline"
+                : "Saved"}
           </span>
           <span className="text-muted-foreground">|</span>
           {collaborators.length > 0 && (
