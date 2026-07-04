@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -31,6 +32,7 @@ from app.services.auth import (
 )
 from app.utils.security import (
     create_access_token,
+    dummy_verify_password,
     hash_password,
     verify_password,
 )
@@ -85,10 +87,27 @@ async def register(
             },
         )
 
-    user = await create_user(db, body.email, body.username, body.display_name, body.password)
-    access_token, expires_in = create_access_token(user.id)
-    raw_refresh = await create_refresh_token(db, user.id)
-    await db.commit()
+    try:
+        user = await create_user(
+            db, body.email, body.username, body.display_name, body.password
+        )
+        access_token, expires_in = create_access_token(user.id)
+        raw_refresh = await create_refresh_token(db, user.id)
+        await db.commit()
+    except IntegrityError:
+        # Lost a race with a concurrent identical registration (the pre-checks
+        # above both passed). The functional unique indexes on LOWER(email)/
+        # LOWER(username) caught it — return 409 instead of a 500.
+        await db.rollback()
+        if await find_user_by_email(db, body.email):
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "EMAIL_TAKEN", "message": "An account with this email already exists."},
+            )
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "USERNAME_TAKEN", "message": "This username is already taken."},
+        )
 
     _set_refresh_cookie(response, raw_refresh)
 
@@ -109,22 +128,17 @@ async def login(
 ) -> AuthResponse:
     user = await find_user_by_email(db, body.email)
 
-    if user is None:
-        raise HTTPException(
-            status_code=401,
-            detail={"code": "INVALID_CREDENTIALS", "message": "Invalid email or password."},
-        )
+    # Verify the password on every path — including "no such account" and
+    # "OAuth-only account" — so response timing and the error returned don't
+    # reveal whether an email is registered or how it authenticates. Both the
+    # missing-account and wrong-password cases return the same generic 401.
+    if user is not None and user.password_hash is not None:
+        password_ok = verify_password(body.password, user.password_hash)
+    else:
+        dummy_verify_password(body.password)
+        password_ok = False
 
-    if user.password_hash is None:
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "code": "OAUTH_ONLY_ACCOUNT",
-                "message": "This account uses OAuth login. Please sign in with your OAuth provider.",
-            },
-        )
-
-    if not verify_password(body.password, user.password_hash):
+    if not password_ok:
         raise HTTPException(
             status_code=401,
             detail={"code": "INVALID_CREDENTIALS", "message": "Invalid email or password."},
@@ -248,6 +262,7 @@ async def password_reset(
 @router.post("/password/change")
 async def password_change(
     body: PasswordChangeRequest,
+    response: Response,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
@@ -267,7 +282,14 @@ async def password_change(
         )
 
     user.password_hash = hash_password(body.new_password)
+
+    # Revoke every existing session (a password change should evict a possible
+    # attacker), then re-issue one for the caller so this device stays signed in.
+    await revoke_all_user_tokens(db, user.id)
+    raw_refresh = await create_refresh_token(db, user.id)
     await db.commit()
+
+    _set_refresh_cookie(response, raw_refresh)
 
     return MessageResponse(message="Password changed successfully.")
 

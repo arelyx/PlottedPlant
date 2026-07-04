@@ -1,3 +1,4 @@
+import hmac
 import uuid
 from collections.abc import AsyncGenerator
 
@@ -76,7 +77,7 @@ async def verify_internal_secret(
     x_internal_secret: str = Header(..., alias="X-Internal-Secret"),
 ) -> None:
     """Verify the X-Internal-Secret header for internal endpoints."""
-    if x_internal_secret != settings.internal_secret:
+    if not hmac.compare_digest(x_internal_secret, settings.internal_secret):
         raise HTTPException(status_code=401, detail="Invalid internal secret")
 
 

@@ -61,9 +61,21 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        # Match registration, which strips before storage; otherwise a
+        # leading/trailing space makes a correct password fail to match.
+        return v.strip()
+
 
 class PasswordForgotRequest(BaseModel):
     email: str
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip()
 
 
 class PasswordResetRequest(BaseModel):
