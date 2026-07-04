@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { api } from "@/lib/api";
+import { usePreferencesStore } from "@/stores/preferences";
 
 interface User {
   id: number;
@@ -74,6 +75,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Logout should succeed even if the API call fails
     }
     api.setAccessToken(null);
+    usePreferencesStore.getState().reset();
     set({ user: null });
   },
 
