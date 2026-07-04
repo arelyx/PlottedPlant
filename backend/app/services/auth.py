@@ -74,53 +74,71 @@ async def rotate_refresh_token(db: AsyncSession, raw_token: str) -> tuple[User, 
     token family for that user is revoked.
     """
     token_hash = hash_token(raw_token)
+    now = datetime.now(timezone.utc)
 
-    result = await db.execute(
-        select(RefreshToken).where(RefreshToken.token_hash == token_hash)
+    # Atomically claim the presented token by revoking it, but only if it is
+    # still active. This single UPDATE is the concurrency guard: two requests
+    # presenting the same token race on the row's `revoked_at IS NULL` filter,
+    # and Postgres lets exactly one win. The loser matches zero rows and falls
+    # into the reuse-detection branch — so a stolen token used alongside the
+    # victim's legitimate refresh reliably trips the alarm instead of silently
+    # minting two independent chains (the old read-then-write had no such guard).
+    claim = await db.execute(
+        update(RefreshToken)
+        .where(RefreshToken.token_hash == token_hash)
+        .where(RefreshToken.revoked_at.is_(None))
+        .values(revoked_at=now)
+        .returning(
+            RefreshToken.id, RefreshToken.user_id, RefreshToken.expires_at
+        )
     )
-    old_token = result.scalar_one_or_none()
+    row = claim.first()
 
-    if old_token is None:
+    if row is None:
+        # Token is unknown or was already revoked. If it exists, this is reuse
+        # of a rotated/revoked token → revoke the whole family for that user.
+        existing = await db.execute(
+            select(RefreshToken.user_id).where(RefreshToken.token_hash == token_hash)
+        )
+        user_id = existing.scalar_one_or_none()
+        if user_id is not None:
+            await db.execute(
+                update(RefreshToken)
+                .where(RefreshToken.user_id == user_id)
+                .where(RefreshToken.revoked_at.is_(None))
+                .values(revoked_at=now)
+            )
+            await db.commit()
         return None
 
-    # Reuse detection: revoked token presented → revoke all user tokens
-    if old_token.revoked_at is not None:
-        await db.execute(
-            update(RefreshToken)
-            .where(RefreshToken.user_id == old_token.user_id)
-            .where(RefreshToken.revoked_at.is_(None))
-            .values(revoked_at=func.now())
-        )
+    old_id, user_id, expires_at = row.id, row.user_id, row.expires_at
+
+    # The token was active but past its TTL. It's now revoked (harmless); an
+    # expired token must not rotate.
+    if expires_at < now:
         await db.commit()
         return None
 
-    # Check expiry
-    if old_token.expires_at < datetime.now(timezone.utc):
-        return None
-
-    # Rotate: revoke old, create new
+    # Mint the replacement and link the chain for forensic analysis.
     new_raw_token = generate_token()
     new_token_hash = hash_token(new_raw_token)
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        days=settings.jwt_refresh_token_expire_days
-    )
+    new_expires_at = now + timedelta(days=settings.jwt_refresh_token_expire_days)
 
     new_refresh = RefreshToken(
-        user_id=old_token.user_id,
+        user_id=user_id,
         token_hash=new_token_hash,
-        expires_at=expires_at,
+        expires_at=new_expires_at,
     )
     db.add(new_refresh)
     await db.flush()
 
-    old_token.revoked_at = datetime.now(timezone.utc)
-    old_token.replaced_by_id = new_refresh.id
-    await db.flush()
-
-    # Load user
-    user_result = await db.execute(
-        select(User).where(User.id == old_token.user_id)
+    await db.execute(
+        update(RefreshToken)
+        .where(RefreshToken.id == old_id)
+        .values(replaced_by_id=new_refresh.id)
     )
+
+    user_result = await db.execute(select(User).where(User.id == user_id))
     user = user_result.scalar_one_or_none()
     if user is None:
         return None

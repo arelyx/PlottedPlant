@@ -18,6 +18,17 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
+# A fixed bcrypt hash used to equalize login timing. Verifying a supplied
+# password against this hash costs the same as a real check, so a missing or
+# passwordless (OAuth-only) account can't be distinguished by response time.
+_DUMMY_PASSWORD_HASH = pwd_context.hash("timing-equalizer")
+
+
+def dummy_verify_password(plain_password: str) -> None:
+    """Run a throwaway bcrypt verification to match the timing of a real one."""
+    pwd_context.verify(plain_password, _DUMMY_PASSWORD_HASH)
+
+
 def hash_token(token: str) -> bytes:
     """SHA-256 hash a token for database storage. Raw token goes to client."""
     return hashlib.sha256(token.encode("utf-8")).digest()
