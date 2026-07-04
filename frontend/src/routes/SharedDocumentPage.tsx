@@ -15,12 +15,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { accessPublicLink, type PublicDocumentAccess } from "@/lib/shares";
+import { accessPublicLink, duplicatePublicLink, type PublicDocumentAccess } from "@/lib/shares";
 import { api } from "@/lib/api";
 import { sanitizeSvg } from "@/lib/sanitize";
 import { usePreferencesStore } from "@/stores/preferences";
 import { useAuthStore } from "@/stores/auth";
-import { duplicateDocument } from "@/lib/documents";
 
 // --- API helpers ---
 
@@ -60,6 +59,8 @@ export function SharedDocumentPage() {
   const [data, setData] = useState<PublicDocumentAccess | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [content, setContent] = useState("");
+  const [duplicating, setDuplicating] = useState(false);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
 
   // Render state
   const [svgContent, setSvgContent] = useState<string | null>(null);
@@ -100,12 +101,18 @@ export function SharedDocumentPage() {
   }, [content, triggerRender]);
 
   const handleDuplicate = async () => {
-    if (!data) return;
+    if (!data || !token) return;
+    setDuplicateError(null);
+    setDuplicating(true);
     try {
-      const newDoc = await duplicateDocument(data.document.id);
+      // Token-scoped: public-link viewers have no share row on the source doc,
+      // so the standard document duplicate endpoint would 404 for them.
+      const newDoc = await duplicatePublicLink(token);
       navigate(`/documents/${newDoc.id}`);
     } catch {
-      console.error("Failed to duplicate");
+      setDuplicateError("Couldn't duplicate this document. Please try again.");
+    } finally {
+      setDuplicating(false);
     }
   };
 
@@ -212,12 +219,18 @@ export function SharedDocumentPage() {
           <Button
             variant="outline"
             size="sm"
+            disabled={duplicating}
             onClick={() => user ? handleDuplicate() : navigate("/login")}
           >
-            Duplicate
+            {duplicating ? "Duplicating…" : "Duplicate"}
           </Button>
         </div>
       </div>
+      {duplicateError && (
+        <div className="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+          {duplicateError}
+        </div>
+      )}
 
       {/* Editor + Preview */}
       <div className="flex-1 overflow-hidden">
