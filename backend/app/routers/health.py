@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_db, get_redis
+from app.dependencies import get_db, get_redis, verify_internal_secret
 
 router = APIRouter(prefix="/api/v1/health", tags=["health"])
 
@@ -19,11 +19,13 @@ async def health_check():
     }
 
 
-@router.get("/detailed")
+@router.get("/detailed", dependencies=[Depends(verify_internal_secret)])
 async def health_check_detailed(
     db: AsyncSession = Depends(get_db),
     redis: aioredis.Redis = Depends(get_redis),
 ):
+    # Guarded by the internal secret: exposing dependency connection state to
+    # the public leaks infrastructure detail. The simple /health stays open.
     dependencies = {}
 
     # Check PostgreSQL

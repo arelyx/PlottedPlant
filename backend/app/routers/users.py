@@ -16,6 +16,16 @@ from app.schemas.user import (
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
 
+def _mask_email(email: str) -> str:
+    """Partially mask an email so search results can disambiguate a user
+    without exposing full addresses for bulk harvesting."""
+    local, sep, domain = email.partition("@")
+    if not sep:
+        return "***"
+    masked_local = (local[0] + "***") if local else "***"
+    return f"{masked_local}@{domain}"
+
+
 @router.get("/me")
 async def get_me(user: User = Depends(get_current_user)) -> UserResponse:
     return UserResponse.model_validate(user)
@@ -62,7 +72,16 @@ async def search_users(
         .limit(limit)
     )
     users = result.scalars().all()
-    return [UserSearchResponse.model_validate(u) for u in users]
+    return [
+        UserSearchResponse(
+            id=u.id,
+            username=u.username,
+            display_name=u.display_name,
+            email=_mask_email(u.email),
+            avatar_url=u.avatar_url,
+        )
+        for u in users
+    ]
 
 
 @router.get("/me/preferences")

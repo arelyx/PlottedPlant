@@ -11,8 +11,14 @@ class UserUpdateRequest(BaseModel):
     @field_validator("avatar_url")
     @classmethod
     def validate_avatar_url(cls, v: str | None) -> str | None:
-        if v is not None and len(v) > 2048:
+        if v is None or v == "":
+            return v
+        if len(v) > 2048:
             raise ValueError("Avatar URL must be at most 2048 characters")
+        # Only http(s) — reject javascript:/data: and other schemes that could
+        # execute when the URL is rendered.
+        if not re.match(r"^https?://", v, re.IGNORECASE):
+            raise ValueError("Avatar URL must be an http(s) URL")
         return v
 
     @field_validator("display_name")

@@ -193,9 +193,11 @@ async def refresh(
 async def logout(
     response: Response,
     db: AsyncSession = Depends(get_db),
-    _user_id: int = Depends(get_current_user_id),
     refresh_token: str | None = Cookie(None, alias=REFRESH_COOKIE_NAME),
 ):
+    # Authenticate via the refresh cookie, not the access token: a user whose
+    # 30-minute access token has expired must still be able to revoke their
+    # (30-day) refresh token server-side without first calling /refresh.
     if refresh_token:
         await revoke_refresh_token(db, refresh_token)
         await db.commit()
