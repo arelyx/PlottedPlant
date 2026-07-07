@@ -1,22 +1,24 @@
 import { useEffect } from "react";
-import { Link, Outlet, useNavigate } from "react-router-dom";
-import { useAuthStore } from "@/stores/auth";
+import { Link, Outlet } from "react-router-dom";
+import {
+  SignedIn,
+  SignedOut,
+  SignInButton,
+  SignUpButton,
+  UserButton,
+  useUser,
+} from "@clerk/clerk-react";
 import { usePreferencesStore } from "@/stores/preferences";
 import { Button } from "@/components/ui/button";
 
 export function AppLayout() {
-  const { user, logout, isInitialized, initialize } = useAuthStore();
+  const { isSignedIn } = useUser();
   const { preferences, isLoaded, resolvedTheme, load, update } =
     usePreferencesStore();
-  const navigate = useNavigate();
 
   useEffect(() => {
-    if (!isInitialized) initialize();
-  }, [isInitialized, initialize]);
-
-  useEffect(() => {
-    if (!isLoaded) load();
-  }, [isLoaded, load]);
+    if (isSignedIn && !isLoaded) load();
+  }, [isSignedIn, isLoaded, load]);
 
   // Listen for OS theme changes when using "system"
   useEffect(() => {
@@ -30,11 +32,6 @@ export function AppLayout() {
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, [preferences.theme]);
-
-  const handleLogout = async () => {
-    await logout();
-    navigate("/login");
-  };
 
   const cycleTheme = () => {
     const order: Array<"light" | "dark" | "system"> = [
@@ -54,7 +51,7 @@ export function AppLayout() {
       <header className="border-b">
         <div className="flex h-14 items-center justify-between px-4">
           <div className="flex items-center gap-4">
-            <Link to={user ? "/dashboard" : "/"} className="text-lg font-semibold">
+            <Link to={isSignedIn ? "/dashboard" : "/"} className="text-lg font-semibold">
               PlottedPlant
             </Link>
             <nav className="flex items-center gap-2">
@@ -76,33 +73,19 @@ export function AppLayout() {
             <Button variant="ghost" size="sm" onClick={cycleTheme} title={`Theme: ${preferences.theme}`}>
               {themeIcon}
             </Button>
-            {user ? (
-              <>
-                <span className="text-sm text-muted-foreground">
-                  {user.display_name}
-                </span>
-                <button
-                  onClick={handleLogout}
-                  className="text-sm text-muted-foreground hover:text-foreground"
-                >
-                  Sign out
+            <SignedIn>
+              <UserButton afterSignOutUrl="/" />
+            </SignedIn>
+            <SignedOut>
+              <SignInButton mode="redirect">
+                <button className="text-sm text-muted-foreground hover:text-foreground">
+                  Sign in
                 </button>
-              </>
-            ) : (
-              isInitialized && (
-                <>
-                  <Link
-                    to="/login"
-                    className="text-sm text-muted-foreground hover:text-foreground"
-                  >
-                    Sign in
-                  </Link>
-                  <Link to="/register">
-                    <Button size="sm">Create account</Button>
-                  </Link>
-                </>
-              )
-            )}
+              </SignInButton>
+              <SignUpButton mode="redirect">
+                <Button size="sm">Create account</Button>
+              </SignUpButton>
+            </SignedOut>
           </div>
         </div>
       </header>

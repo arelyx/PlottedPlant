@@ -5,35 +5,21 @@ interface ApiOptions extends RequestInit {
 }
 
 class ApiClient {
-  private accessToken: string | null = null;
-  private refreshPromise: Promise<boolean> | null = null;
-  private onAuthFailure: (() => void) | null = null;
+  // Clerk owns the session; a bridge component registers a getter that returns
+  // a fresh short-lived session JWT. There is no in-memory token or custom
+  // refresh flow anymore — Clerk mints/refreshes tokens on demand.
+  private tokenGetter: (() => Promise<string | null>) | null = null;
 
-  setAccessToken(token: string | null) {
-    this.accessToken = token;
+  /** Register the source of the current session token (Clerk's getToken). */
+  setTokenGetter(getter: (() => Promise<string | null>) | null) {
+    this.tokenGetter = getter;
   }
 
-  getAccessToken(): string | null {
-    return this.accessToken;
+  /** Current session token, or null when signed out. Used by the WS provider too. */
+  async getToken(): Promise<string | null> {
+    return this.tokenGetter ? await this.tokenGetter() : null;
   }
 
-  /** Register a callback invoked when a session can no longer be refreshed. */
-  setOnAuthFailure(cb: (() => void) | null) {
-    this.onAuthFailure = cb;
-  }
-
-  private handleAuthFailure() {
-    this.accessToken = null;
-    this.onAuthFailure?.();
-  }
-
-  /**
-   * Core fetch with auth-header injection and 401→refresh→retry. Returns the
-   * Response WITHOUT throwing on non-OK statuses (callers that need to inspect
-   * e.g. 422 handle it themselves); only a dead session throws. This is the
-   * single place token handling lives — raw fetches that bypassed it sent
-   * "Bearer null" and never refreshed.
-   */
   private async fetchWithAuth(
     path: string,
     fetchOptions: RequestInit,
@@ -43,35 +29,11 @@ class ApiClient {
     if (!headers.has("Content-Type") && fetchOptions.body) {
       headers.set("Content-Type", "application/json");
     }
-    if (!skipAuth && this.accessToken) {
-      headers.set("Authorization", `Bearer ${this.accessToken}`);
+    if (!skipAuth) {
+      const token = await this.getToken();
+      if (token) headers.set("Authorization", `Bearer ${token}`);
     }
-
-    const response = await fetch(`${API_BASE}${path}`, {
-      ...fetchOptions,
-      headers,
-      credentials: "include", // Send cookies (refresh token)
-    });
-
-    // Auto-refresh on 401
-    if (response.status === 401 && !skipAuth && !path.includes("/auth/refresh")) {
-      const refreshed = await this.tryRefresh();
-      if (refreshed) {
-        headers.set("Authorization", `Bearer ${this.accessToken}`);
-        return fetch(`${API_BASE}${path}`, {
-          ...fetchOptions,
-          headers,
-          credentials: "include",
-        });
-      }
-      // Refresh failed: the session is dead. Clear it and notify the app so it
-      // can redirect to login instead of appearing logged in while every
-      // request silently 401s.
-      this.handleAuthFailure();
-      throw await this.buildError(response);
-    }
-
-    return response;
+    return fetch(`${API_BASE}${path}`, { ...fetchOptions, headers });
   }
 
   async request<T>(path: string, options: ApiOptions = {}): Promise<T> {
@@ -91,40 +53,12 @@ class ApiClient {
   }
 
   /**
-   * Auth + 401-refresh, returning the raw Response without throwing on non-OK.
-   * For callers that must inspect specific statuses (e.g. render's 422 syntax
-   * error) while still getting proper token handling.
+   * Auth-aware fetch returning the raw Response without throwing on non-OK,
+   * for callers that must inspect specific statuses (e.g. render's 422).
    */
   async requestRaw(path: string, options: ApiOptions = {}): Promise<Response> {
     const { skipAuth, ...fetchOptions } = options;
     return this.fetchWithAuth(path, fetchOptions, !!skipAuth);
-  }
-
-  async tryRefresh(): Promise<boolean> {
-    // Deduplicate concurrent refresh attempts (multiple 401s, app boot, and
-    // multiple tabs all share this single in-flight promise so only one
-    // /auth/refresh runs — presenting an already-rotated token would trip the
-    // backend's reuse detection and revoke the whole family).
-    if (this.refreshPromise) return this.refreshPromise;
-
-    this.refreshPromise = (async () => {
-      try {
-        const response = await fetch(`${API_BASE}/auth/refresh`, {
-          method: "POST",
-          credentials: "include",
-        });
-        if (!response.ok) return false;
-        const data = await response.json();
-        this.accessToken = data.access_token;
-        return true;
-      } catch {
-        return false;
-      } finally {
-        this.refreshPromise = null;
-      }
-    })();
-
-    return this.refreshPromise;
   }
 
   private async buildError(response: Response): Promise<ApiError> {

@@ -125,7 +125,7 @@ export function createCollaborationSession(
     url: wsUrl,
     name: documentId,
     document: ydoc,
-    token: () => api.getAccessToken() || "",
+    token: async () => (await api.getToken()) || "",
     onStatus({ status }) {
       callbacks.onStatus?.(status as ConnectionStatus);
 
