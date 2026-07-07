@@ -20,7 +20,7 @@ class ApiClient {
     return this.tokenGetter ? await this.tokenGetter() : null;
   }
 
-  private async fetchWithAuth(
+  private async doFetch(
     path: string,
     fetchOptions: RequestInit,
     skipAuth: boolean,
@@ -34,6 +34,22 @@ class ApiClient {
       if (token) headers.set("Authorization", `Bearer ${token}`);
     }
     return fetch(`${API_BASE}${path}`, { ...fetchOptions, headers });
+  }
+
+  private async fetchWithAuth(
+    path: string,
+    fetchOptions: RequestInit,
+    skipAuth: boolean,
+  ): Promise<Response> {
+    let response = await this.doFetch(path, fetchOptions, skipAuth);
+    // On a fresh load the Clerk session token can lag the first request. Retry
+    // once with a freshly-minted token before surfacing a 401, so the dashboard
+    // doesn't render empty during the sign-in handoff.
+    if (response.status === 401 && !skipAuth) {
+      await new Promise((r) => setTimeout(r, 250));
+      response = await this.doFetch(path, fetchOptions, skipAuth);
+    }
+    return response;
   }
 
   async request<T>(path: string, options: ApiOptions = {}): Promise<T> {
