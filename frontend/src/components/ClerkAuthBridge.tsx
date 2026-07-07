@@ -16,9 +16,11 @@ export function ClerkAuthBridge() {
   const setLoaded = useAuthStore((s) => s.setLoaded);
 
   // Route every API/WS request's Authorization through Clerk's session token.
+  // Call getToken() directly (it returns null when there's no session) rather
+  // than gating on a possibly-stale isSignedIn snapshot.
   useEffect(() => {
-    api.setTokenGetter(async () => (isSignedIn ? await getToken() : null));
-  }, [isSignedIn, getToken]);
+    api.setTokenGetter(() => getToken());
+  }, [getToken]);
 
   // Hydrate (or clear) the local profile as the Clerk session changes.
   useEffect(() => {
