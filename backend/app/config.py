@@ -20,30 +20,18 @@ class Settings(BaseSettings):
 
     # Security
     internal_secret: str
-    jwt_secret_key: str
-    jwt_access_token_expire_minutes: int = 30
-    jwt_refresh_token_expire_days: int = 30
-    # Absolute lifetime of a login session regardless of rotation.
-    jwt_session_absolute_expire_days: int = 90
-    # How long revoked/expired token rows are retained before cleanup, and the
-    # interval between background maintenance sweeps.
-    token_retention_days: int = 7
+
+    # Clerk (identity & credentials). The secret key authorizes Clerk Backend
+    # API calls (user provisioning); the issuer/JWKS verify session tokens.
+    clerk_secret_key: str = ""
+    clerk_issuer: str = "https://clerk.plottedplant.com"
+    clerk_jwks_url: str = "https://clerk.plottedplant.com/.well-known/jwks.json"
+    clerk_api_url: str = "https://api.clerk.com/v1"
+    # Comma-separated origins Clerk may mint tokens for (checked via `azp`).
+    clerk_authorized_parties: str = "https://plottedplant.com"
+
+    # Interval between background maintenance sweeps (orphaned-content GC).
     maintenance_interval_seconds: int = 21600  # 6 hours
-
-    # OAuth
-    oauth_google_client_id: str = ""
-    oauth_google_client_secret: str = ""
-    oauth_github_client_id: str = ""
-    oauth_github_client_secret: str = ""
-    oauth_redirect_base_url: str = ""
-
-    # SMTP
-    smtp_host: str = ""
-    smtp_port: int = 587
-    smtp_user: str = ""
-    smtp_password: str = ""
-    smtp_from_email: str = ""
-    smtp_use_tls: bool = True
 
     # Public
     public_url: str = "http://localhost"

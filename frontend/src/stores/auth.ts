@@ -1,8 +1,10 @@
 import { create } from "zustand";
 import { api } from "@/lib/api";
-import { usePreferencesStore } from "@/stores/preferences";
 
-interface User {
+/** The local app profile (bigint id), fetched from /users/me. Identity and
+ *  credentials live in Clerk; this is the row app data (documents, shares) is
+ *  keyed to. Populated by ClerkAuthBridge from the Clerk session. */
+export interface AppUser {
   id: number;
   email: string;
   username: string;
@@ -14,103 +16,29 @@ interface User {
 }
 
 interface AuthState {
-  user: User | null;
-  isLoading: boolean;
+  user: AppUser | null;
+  isLoaded: boolean;
+  /** Back-compat alias of isLoaded for existing consumers. */
   isInitialized: boolean;
-
-  login: (email: string, password: string) => Promise<void>;
-  register: (
-    email: string,
-    username: string,
-    displayName: string,
-    password: string,
-  ) => Promise<void>;
-  logout: () => Promise<void>;
-  refreshToken: () => Promise<boolean>;
-  initialize: () => Promise<void>;
+  /** Back-compat; Clerk drives loading state now. */
+  isLoading: boolean;
+  setUser: (user: AppUser | null) => void;
+  setLoaded: (loaded: boolean) => void;
+  /** No-op: ClerkAuthBridge drives hydration. Kept so callers don't break. */
+  initialize: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  isLoading: false,
+  isLoaded: false,
   isInitialized: false,
-
-  login: async (email, password) => {
-    const data = await api.request<{
-      user: User;
-      access_token: string;
-      expires_in: number;
-    }>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-      skipAuth: true,
-    });
-    api.setAccessToken(data.access_token);
-    set({ user: data.user });
-  },
-
-  register: async (email, username, displayName, password) => {
-    const data = await api.request<{
-      user: User;
-      access_token: string;
-      expires_in: number;
-    }>("/auth/register", {
-      method: "POST",
-      body: JSON.stringify({
-        email,
-        username,
-        display_name: displayName,
-        password,
-      }),
-      skipAuth: true,
-    });
-    api.setAccessToken(data.access_token);
-    set({ user: data.user });
-  },
-
-  logout: async () => {
-    try {
-      await api.request("/auth/logout", { method: "POST" });
-    } catch {
-      // Logout should succeed even if the API call fails
-    }
-    api.setAccessToken(null);
-    usePreferencesStore.getState().reset();
-    set({ user: null });
-  },
-
-  refreshToken: async () => {
-    const ok = await api.tryRefresh();
-    if (!ok) set({ user: null });
-    return ok;
-  },
-
-  initialize: async () => {
-    // Guard against concurrent boots (React StrictMode double-invokes effects,
-    // multiple tabs). The refresh itself is deduplicated in the api client, but
-    // this avoids a redundant second /users/me fetch.
-    if (get().isLoading || get().isInitialized) return;
-    set({ isLoading: true });
-
-    // Refresh via the deduplicated api-client path so two concurrent boots
-    // don't each present the cookie and trip the backend's reuse detection.
-    const refreshed = await api.tryRefresh();
-    if (!refreshed) {
-      set({ user: null, isInitialized: true, isLoading: false });
-      return;
-    }
-
-    try {
-      const user = await api.request<User>("/users/me");
-      set({ user, isInitialized: true, isLoading: false });
-    } catch {
-      set({ user: null, isInitialized: true, isLoading: false });
-    }
-  },
+  isLoading: false,
+  setUser: (user) => set({ user }),
+  setLoaded: (loaded) => set({ isLoaded: loaded, isInitialized: loaded }),
+  initialize: () => {},
 }));
 
-// When a request can't refresh the session, clear auth state so route guards
-// redirect to login instead of leaving the app apparently signed in.
-api.setOnAuthFailure(() => {
-  useAuthStore.setState({ user: null });
-});
+/** Fetch the local app profile for the signed-in Clerk user. */
+export async function fetchAppUser(): Promise<AppUser> {
+  return api.request<AppUser>("/users/me");
+}
