@@ -10,7 +10,6 @@ from app.config import settings
 from app.dependencies import async_session_factory, engine, redis_client
 from app.services.maintenance import run_maintenance
 from app.routers import (
-    auth,
     documents,
     export,
     folders,
@@ -85,7 +84,6 @@ app.add_middleware(
 
 # Routers
 app.include_router(health.router)
-app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(folders.router)
 app.include_router(documents.router)

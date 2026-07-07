@@ -1,3 +1,4 @@
+import asyncio
 import hmac
 import uuid
 from collections.abc import AsyncGenerator
@@ -8,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
-from app.utils.security import decode_access_token
+from app.utils.clerk import get_or_provision_user, verify_clerk_token
 
 engine = create_async_engine(settings.database_url, echo=settings.app_env == "development")
 async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -25,38 +26,47 @@ async def get_redis() -> aioredis.Redis:
     return redis_client
 
 
-async def get_current_user_id(request: Request) -> int:
-    """Extract and validate user ID from JWT access token in Authorization header."""
+def _bearer_token(request: Request) -> str | None:
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+    return auth_header[7:]
+
+
+async def get_current_user_id(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> int:
+    """Resolve the local user id from a Clerk session token, provisioning the
+    user on first sight. Raises 401 if the token is missing or invalid."""
+    token = _bearer_token(request)
+    if token is None:
         raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
 
-    token = auth_header[7:]  # Strip "Bearer "
-    payload = decode_access_token(token)
-    if payload is None:
+    claims = await asyncio.to_thread(verify_clerk_token, token)
+    if claims is None:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    try:
-        return int(payload["sub"])
-    except (KeyError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid token payload")
+    user = await get_or_provision_user(db, claims)
+    return user.id
 
 
-async def get_optional_user_id(request: Request) -> int | None:
-    """Extract user ID from JWT if present, otherwise return None."""
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
+async def get_optional_user_id(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> int | None:
+    """Like get_current_user_id but returns None instead of raising when there
+    is no valid token (for endpoints that work anonymously)."""
+    token = _bearer_token(request)
+    if token is None:
         return None
 
-    token = auth_header[7:]
-    payload = decode_access_token(token)
-    if payload is None:
+    claims = await asyncio.to_thread(verify_clerk_token, token)
+    if claims is None:
         return None
 
-    try:
-        return int(payload["sub"])
-    except (KeyError, ValueError):
-        return None
+    user = await get_or_provision_user(db, claims)
+    return user.id
 
 
 async def get_current_user(

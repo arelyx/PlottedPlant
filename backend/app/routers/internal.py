@@ -4,7 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db, parse_document_uuid, verify_internal_secret
 from app.models.document import Document
-from app.models.user import User
 from fastapi.responses import JSONResponse
 
 from app.schemas.internal import (
@@ -20,7 +19,7 @@ from app.services.document import (
     resolve_document_internal_id,
     resolve_document_permission,
 )
-from app.utils.security import decode_access_token
+from app.utils.clerk import get_or_provision_user, verify_clerk_token
 
 router = APIRouter(
     prefix="/api/v1/internal",
@@ -35,23 +34,18 @@ async def validate_auth(
     db: AsyncSession = Depends(get_db),
 ) -> AuthValidateResponse:
     """
-    Validate a JWT token and check document permissions.
+    Validate a Clerk session token and check document permissions.
     Called by the Hocuspocus collaboration server.
     Returns 200 for both valid and invalid (inquiry pattern).
     """
-    payload = decode_access_token(body.token)
-    if payload is None:
+    import asyncio
+
+    claims = await asyncio.to_thread(verify_clerk_token, body.token)
+    if claims is None:
         return AuthValidateResponse(valid=False, reason="Token expired or invalid")
 
-    try:
-        user_id = int(payload["sub"])
-    except (KeyError, ValueError):
-        return AuthValidateResponse(valid=False, reason="Invalid token payload")
-
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-    if user is None:
-        return AuthValidateResponse(valid=False, reason="User not found")
+    user = await get_or_provision_user(db, claims)
+    user_id = user.id
 
     # Resolve UUID to internal ID, then check permission
     doc_uuid = parse_document_uuid(body.document_id)

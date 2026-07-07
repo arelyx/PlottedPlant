@@ -22,10 +22,13 @@ class User(Base):
     id: Mapped[int] = mapped_column(
         BigInteger, primary_key=True, server_default=text("generated always as identity")
     )
+    # Clerk subject (e.g. "user_xxx"). Identity/credentials live in Clerk; this
+    # maps a Clerk user to the local app row. Nullable only for the migration
+    # window before the data wipe.
+    clerk_user_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     email: Mapped[str] = mapped_column(Text, nullable=False)
     username: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
-    password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_email_verified: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
@@ -38,15 +41,6 @@ class User(Base):
     )
 
     # Relationships
-    oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
-    )
-    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
-    )
-    password_reset_tokens: Mapped[list["PasswordResetToken"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
-    )
     preferences: Mapped["UserPreferences | None"] = relationship(
         back_populates="user", cascade="all, delete-orphan", uselist=False
     )
@@ -60,6 +54,7 @@ class User(Base):
     __table_args__ = (
         UniqueConstraint("email", name="uq_users_email"),
         UniqueConstraint("username", name="uq_users_username"),
+        UniqueConstraint("clerk_user_id", name="uq_users_clerk_user_id"),
         CheckConstraint(r"email ~* '^[^@]+@[^@]+\.[^@]+$'", name="ck_users_email_format"),
         CheckConstraint(
             r"username ~ '^[a-zA-Z0-9_-]{3,30}$'", name="ck_users_username_format"
