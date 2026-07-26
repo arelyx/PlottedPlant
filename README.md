@@ -10,11 +10,20 @@ Browser  -->  Nginx (reverse proxy / TLS)  -->  FastAPI   (REST API)
 
 FastAPI  -->  PostgreSQL  (persistent data)
          -->  Redis       (render cache, rate limiting)
-         -->  PlantUML    (diagram rendering)
+         -->  PlantUML    (server-side diagram rendering: shared views, PNG/PDF export)
          -->  Hocuspocus  (force-content, close-room commands)
 
 Hocuspocus  -->  FastAPI internal endpoints  (auth, content load/persist)
 ```
+
+Live editor previews (document editor and landing-page playground) render
+**client-side** using the TeaVM/JS build of PlantUML
+([`@plantuml/core`](https://www.npmjs.com/package/@plantuml/core)), so no
+server round trip happens while typing. The engine (~3 MB compressed) is
+lazy-loaded only on editor pages and cached immutably; until it's ready —
+and in browsers where it fails to load — previews transparently fall back
+to the server `/render/svg` endpoint. Shared/public document views and
+PNG/PDF exports always render server-side via the PlantUML container.
 
 Seven Docker containers across two networks:
 

@@ -40,49 +40,18 @@ import {
   type ConnectionStatus,
   type CollaboratorInfo,
 } from "@/lib/collaboration";
+import {
+  renderPreview,
+  whenEngineReady,
+  isClientEngineReady,
+  type RenderErrorInfo,
+} from "@/lib/plantuml-client";
 
 // --- Types ---
 
-interface RenderError {
-  message: string;
-  line?: number;
-}
+type RenderError = RenderErrorInfo;
 
 type ViewMode = "split" | "editor" | "preview";
-
-// --- API helpers ---
-
-async function renderSvg(source: string): Promise<{ svg?: string; error?: RenderError }> {
-  try {
-    const response = await api.requestRaw("/render/svg", {
-      method: "POST",
-      body: JSON.stringify({ source }),
-    });
-
-    if (response.status === 422) {
-      const data = await response.json();
-      return { error: data.detail?.error || data.error || { message: "Syntax error" } };
-    }
-
-    if (!response.ok) throw new Error("Render failed");
-    const svg = await response.text();
-    return { svg };
-  } catch {
-    return { error: { message: "Render request failed" } };
-  }
-}
-
-async function checkSyntax(source: string): Promise<{ valid: boolean; error?: RenderError }> {
-  try {
-    const data = await api.request<{ valid: boolean; error?: RenderError }>("/render/check", {
-      method: "POST",
-      body: JSON.stringify({ source }),
-    });
-    return data;
-  } catch {
-    return { valid: true }; // Don't block on check errors
-  }
-}
 
 // --- Component ---
 
@@ -167,47 +136,48 @@ export function DocumentPage() {
       if (renderTimeoutRef.current) clearTimeout(renderTimeoutRef.current);
       if (renderAbortRef.current) renderAbortRef.current.abort();
 
+      // In-browser renders skip the network round trip, so a shorter debounce
+      // is affordable; the server fallback keeps the original 400ms.
+      const debounceMs = isClientEngineReady() ? 200 : 400;
       renderTimeoutRef.current = setTimeout(async () => {
         const abortController = new AbortController();
         renderAbortRef.current = abortController;
         setRendering(true);
         const start = performance.now();
 
-        // Parallel: render SVG + syntax check
-        const [renderResult, checkResult] = await Promise.all([
-          renderSvg(source),
-          checkSyntax(source),
-        ]);
+        // Client-side TeaVM render when the engine is ready, server otherwise.
+        // The result carries the syntax error too, so no separate check call.
+        const result = await renderPreview(source);
 
-        if (abortController.signal.aborted) return;
+        if (abortController.signal.aborted || result.superseded) return;
 
         const elapsed = Math.round(performance.now() - start);
         setRenderTime(elapsed);
         setRendering(false);
 
-        if (renderResult.svg) {
-          setSvgContent(renderResult.svg);
-          setLastGoodSvg(renderResult.svg);
+        if (result.svg) {
+          setSvgContent(result.svg);
+          setLastGoodSvg(result.svg);
           setRenderError(null);
-        } else if (renderResult.error) {
-          setRenderError(renderResult.error);
+        } else if (result.error) {
+          setRenderError(result.error);
         }
 
         // Set Monaco error markers
         if (monacoRef.current && editorRef.current) {
           const model = editorRef.current.getModel();
           if (model) {
-            if (!checkResult.valid && checkResult.error) {
-              // Clamp to the model's real line range — a server-reported line
-              // past the current line count makes getLineMaxColumn throw.
+            if (result.error && !result.error.transient) {
+              // Clamp to the model's real line range — a reported line past
+              // the current line count makes getLineMaxColumn throw.
               const errorLine = Math.min(
-                Math.max(checkResult.error.line || 1, 1),
+                Math.max(result.error.line || 1, 1),
                 model.getLineCount(),
               );
               monacoRef.current.editor.setModelMarkers(model, "plantuml", [
                 {
                   severity: monacoRef.current.MarkerSeverity.Error,
-                  message: checkResult.error.message,
+                  message: result.error.message,
                   startLineNumber: errorLine,
                   startColumn: 1,
                   endLineNumber: errorLine,
@@ -219,10 +189,24 @@ export function DocumentPage() {
             }
           }
         }
-      }, 400); // 400ms debounce
+      }, debounceMs);
     },
     []
   );
+
+  // Start downloading the in-browser rendering engine immediately so it's
+  // warm by the first debounced render (renders fall back to the server
+  // until it's ready), and re-render the current content locally once it
+  // arrives so the preview no longer depends on the server path.
+  useEffect(() => {
+    let active = true;
+    whenEngineReady().then((ready) => {
+      if (active && ready && contentRef.current) triggerRender(contentRef.current);
+    });
+    return () => {
+      active = false;
+    };
+  }, [triggerRender]);
 
   // Trigger initial render from REST content so preview shows immediately
   // (before WebSocket syncs). The Y.Text onSynced callback will re-trigger
