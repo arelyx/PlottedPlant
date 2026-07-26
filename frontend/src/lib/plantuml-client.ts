@@ -106,8 +106,7 @@ export function whenEngineReady(): Promise<boolean> {
  * message line; requiring both makes a false positive on a real user diagram
  * vanishingly unlikely.
  */
-function detectErrorSvg(svg: string): RenderErrorInfo | null {
-  const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+function detectErrorIn(doc: Document): RenderErrorInfo | null {
   const texts = Array.from(doc.querySelectorAll("text"));
 
   let line: number | undefined;
@@ -130,6 +129,31 @@ function detectErrorSvg(svg: string): RenderErrorInfo | null {
   return { message: (red.textContent ?? "").trim() || "Syntax error", line };
 }
 
+/**
+ * Post-process a successful engine render: detect the rendered error image,
+ * and restore the white background. The PlantUML server puts
+ * `background:#FFFFFF` in the root <svg> style, but the TeaVM build emits no
+ * background at all (even an explicit `skinparam backgroundColor` is dropped
+ * by its SVG writer), leaving diagrams transparent — unreadable on dark
+ * pages. The has-background guard future-proofs against the engine gaining
+ * background support later.
+ */
+function processEngineSvg(svg: string): { svg?: string; error?: RenderErrorInfo } {
+  const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+  const root = doc.documentElement;
+  if (root.tagName !== "svg") return { svg }; // parse failure — pass through
+
+  const error = detectErrorIn(doc);
+  if (error) return { error };
+
+  const style = root.getAttribute("style") ?? "";
+  if (!/background/i.test(style)) {
+    const sep = style && !/;\s*$/.test(style) ? ";" : "";
+    root.setAttribute("style", `${style}${sep}background:#FFFFFF;`);
+  }
+  return { svg: new XMLSerializer().serializeToString(root) };
+}
+
 function runEngineRender(source: string): Promise<PreviewRenderResult> {
   return new Promise<PreviewRenderResult>((resolve) => {
     let settled = false;
@@ -148,17 +172,16 @@ function runEngineRender(source: string): Promise<PreviewRenderResult> {
     try {
       engine!.renderToString(
         source.split(/\r\n|\r|\n/),
-        (svg) => finish({ error: detectErrorSvg(svg) ?? undefined, svg, engine: "client" }),
+        // On an error image, processEngineSvg returns only the error (no
+        // svg), so callers keep the last good diagram — matching the server
+        // 422 behavior.
+        (svg) => finish({ ...processEngineSvg(svg), engine: "client" }),
         (err) => finish({ error: { message: String(err) || "Render failed" }, engine: "client" }),
       );
     } catch (err) {
       finish({ error: { message: String(err) || "Render failed" }, engine: "client" });
     }
-  }).then((result: PreviewRenderResult) =>
-    // An error image is not a preview — drop the svg so callers keep the
-    // last good diagram, matching the server 422 behavior.
-    result.error ? { ...result, svg: undefined } : result,
-  );
+  });
 }
 
 // Serialized render queue with latest-wins coalescing: at most one render
