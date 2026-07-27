@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /documents/
+Disallow: /login
+Disallow: /register
+
+Sitemap: https://plottedplant.com/sitemap.xml
