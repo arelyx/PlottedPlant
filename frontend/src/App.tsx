@@ -16,6 +16,7 @@ import { RegisterPage } from "@/routes/RegisterPage";
 import { DashboardPage } from "@/routes/DashboardPage";
 import { DocumentPage } from "@/routes/DocumentPage";
 import { TemplateBrowserPage } from "@/routes/TemplateBrowserPage";
+import { TemplateDetailPage } from "@/routes/TemplateDetailPage";
 import { SharedDocumentPage } from "@/routes/SharedDocumentPage";
 import { LandingPage } from "@/routes/LandingPage";
 
@@ -73,6 +74,7 @@ function App() {
             {/* Public app routes (AppLayout without AuthGuard) */}
             <Route element={<AppLayout />}>
               <Route path="/templates" element={<TemplateBrowserPage />} />
+              <Route path="/templates/:slug" element={<TemplateDetailPage />} />
             </Route>
 
             {/* Public share access */}
