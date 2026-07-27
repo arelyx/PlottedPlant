@@ -24,15 +24,22 @@ export async function getTemplate(id: number): Promise<TemplateDetail> {
 }
 
 /**
- * Get the URL for a template's pre-rendered SVG preview.
- * SVGs are static assets in /templates/ named as kebab-case of the template name.
+ * Kebab-case slug for a template, used for detail-page URLs and preview
+ * SVG filenames. Must match slugify() in backend export_templates.py.
  */
-export function getTemplatePreviewUrl(name: string): string {
-  const slug = name
+export function templateSlug(name: string): string {
+  return name
     .toLowerCase()
     .replace(/[()]/g, "")
     .replace(/[/\s]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/-$/, "");
-  return `/templates/${slug}.svg`;
+}
+
+/**
+ * Get the URL for a template's pre-rendered SVG preview.
+ * SVGs are static assets in /templates/ named as kebab-case of the template name.
+ */
+export function getTemplatePreviewUrl(name: string): string {
+  return `/templates/${templateSlug(name)}.svg`;
 }

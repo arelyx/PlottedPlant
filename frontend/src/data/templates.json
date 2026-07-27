@@ -1,0 +1,162 @@
+[
+  {
+    "slug": "basic-sequence",
+    "name": "Basic Sequence",
+    "description": "Two participants exchanging messages.",
+    "diagram_type": "sequence",
+    "sort_order": 1,
+    "content": "@startuml\nparticipant Alice\nparticipant Bob\n\nAlice -> Bob: Request\nBob --> Alice: Response\n@enduml"
+  },
+  {
+    "slug": "sequence-with-notes",
+    "name": "Sequence with Notes",
+    "description": "Sequence diagram with notes and activation.",
+    "diagram_type": "sequence",
+    "sort_order": 2,
+    "content": "@startuml\nactor User\nparticipant \"Web App\" as App\nparticipant \"API Server\" as API\ndatabase \"Database\" as DB\n\nUser -> App: Submit Form\nactivate App\n\nApp -> API: POST /data\nactivate API\n\nnote right of API: Validate input\n\nAPI -> DB: INSERT record\nactivate DB\nDB --> API: OK\ndeactivate DB\n\nAPI --> App: 201 Created\ndeactivate API\n\nApp --> User: Show success\ndeactivate App\n@enduml"
+  },
+  {
+    "slug": "sequence-with-grouping",
+    "name": "Sequence with Grouping",
+    "description": "Sequence diagram with alt/loop groups.",
+    "diagram_type": "sequence",
+    "sort_order": 3,
+    "content": "@startuml\nparticipant Client\nparticipant Server\nparticipant Cache\n\nClient -> Server: GET /resource\n\nalt Cache hit\n    Server -> Cache: lookup(key)\n    Cache --> Server: cached data\n    Server --> Client: 200 OK (cached)\nelse Cache miss\n    Server -> Cache: lookup(key)\n    Cache --> Server: null\n    Server -> Server: compute result\n    Server -> Cache: store(key, result)\n    Server --> Client: 200 OK\nend\n\nloop Every 60 seconds\n    Server -> Cache: cleanup expired\nend\n@enduml"
+  },
+  {
+    "slug": "basic-class",
+    "name": "Basic Class",
+    "description": "Simple class with attributes and methods.",
+    "diagram_type": "class",
+    "sort_order": 1,
+    "content": "@startuml\nclass Animal {\n    +name: String\n    +age: int\n    +makeSound(): void\n    +move(): void\n}\n\nclass Dog {\n    +breed: String\n    +fetch(): void\n}\n\nclass Cat {\n    +indoor: boolean\n    +purr(): void\n}\n\nAnimal <|-- Dog\nAnimal <|-- Cat\n@enduml"
+  },
+  {
+    "slug": "class-with-relationships",
+    "name": "Class with Relationships",
+    "description": "Classes with various UML relationships.",
+    "diagram_type": "class",
+    "sort_order": 2,
+    "content": "@startuml\nclass User {\n    +id: int\n    +email: String\n    +register(): void\n    +login(): void\n}\n\nclass Order {\n    +id: int\n    +total: Decimal\n    +place(): void\n    +cancel(): void\n}\n\nclass Product {\n    +id: int\n    +name: String\n    +price: Decimal\n}\n\nclass OrderItem {\n    +quantity: int\n}\n\nUser \"1\" --> \"*\" Order : places\nOrder \"1\" *-- \"*\" OrderItem : contains\nOrderItem \"*\" --> \"1\" Product : references\n@enduml"
+  },
+  {
+    "slug": "class-with-packages",
+    "name": "Class with Packages",
+    "description": "Classes organized into packages.",
+    "diagram_type": "class",
+    "sort_order": 3,
+    "content": "@startuml\npackage \"Domain\" {\n    class Entity {\n        +id: int\n    }\n    class User extends Entity {\n        +email: String\n    }\n    class Document extends Entity {\n        +title: String\n        +content: String\n    }\n}\n\npackage \"Repository\" {\n    interface Repository<T> {\n        +findById(id: int): T\n        +save(entity: T): void\n        +delete(id: int): void\n    }\n    class UserRepository implements Repository\n    class DocumentRepository implements Repository\n}\n\nUserRepository ..> User\nDocumentRepository ..> Document\n@enduml"
+  },
+  {
+    "slug": "basic-activity",
+    "name": "Basic Activity",
+    "description": "Simple activity flow with start and stop.",
+    "diagram_type": "activity",
+    "sort_order": 1,
+    "content": "@startuml\nstart\n:Receive request;\n:Validate input;\n\nif (Valid?) then (yes)\n    :Process data;\n    :Save to database;\n    :Return success;\nelse (no)\n    :Return error;\nendif\n\nstop\n@enduml"
+  },
+  {
+    "slug": "activity-with-swim-lanes",
+    "name": "Activity with Swim Lanes",
+    "description": "Activity diagram with swim lane partitions.",
+    "diagram_type": "activity",
+    "sort_order": 2,
+    "content": "@startuml\n|Customer|\nstart\n:Browse products;\n:Add to cart;\n:Checkout;\n\n|Payment Service|\n:Process payment;\n\nif (Payment OK?) then (yes)\n    |Warehouse|\n    :Pick items;\n    :Pack order;\n    :Ship order;\n\n    |Customer|\n    :Receive order;\n    stop\nelse (no)\n    |Customer|\n    :Show payment error;\n    stop\nendif\n@enduml"
+  },
+  {
+    "slug": "activity-with-fork-join",
+    "name": "Activity with Fork/Join",
+    "description": "Parallel activity flows using fork and join.",
+    "diagram_type": "activity",
+    "sort_order": 3,
+    "content": "@startuml\nstart\n:Initialize build;\n\nfork\n    :Compile source;\nfork again\n    :Run linter;\nfork again\n    :Run type checker;\nend fork\n\n:Run unit tests;\n\nif (All passed?) then (yes)\n    :Build Docker image;\n    :Push to registry;\n    :Deploy to staging;\n    stop\nelse (no)\n    :Send failure notification;\n    stop\nendif\n@enduml"
+  },
+  {
+    "slug": "use-case-diagram",
+    "name": "Use Case Diagram",
+    "description": "Actors and use cases with relationships.",
+    "diagram_type": "use_case",
+    "sort_order": 1,
+    "content": "@startuml\nleft to right direction\nactor Customer\nactor Admin\n\nrectangle \"Online Store\" {\n    usecase \"Browse Products\" as UC1\n    usecase \"Place Order\" as UC2\n    usecase \"Track Order\" as UC3\n    usecase \"Manage Products\" as UC4\n    usecase \"View Reports\" as UC5\n    usecase \"Make Payment\" as UC6\n}\n\nCustomer --> UC1\nCustomer --> UC2\nCustomer --> UC3\nUC2 ..> UC6 : <<include>>\n\nAdmin --> UC4\nAdmin --> UC5\n@enduml"
+  },
+  {
+    "slug": "component-diagram",
+    "name": "Component Diagram",
+    "description": "System components and their interfaces.",
+    "diagram_type": "component",
+    "sort_order": 1,
+    "content": "@startuml\npackage \"Frontend\" {\n    [React App] as react\n    [API Client] as client\n}\n\npackage \"Backend\" {\n    [REST API] as api\n    [Auth Service] as auth\n    [Business Logic] as logic\n}\n\npackage \"Data Layer\" {\n    [PostgreSQL] as db\n    [Redis Cache] as cache\n}\n\nreact --> client\nclient --> api : HTTPS\napi --> auth\napi --> logic\nlogic --> db\nlogic --> cache\n@enduml"
+  },
+  {
+    "slug": "basic-state",
+    "name": "Basic State",
+    "description": "Simple state machine diagram.",
+    "diagram_type": "state",
+    "sort_order": 1,
+    "content": "@startuml\n[*] --> Draft\n\nDraft --> Review : Submit\nReview --> Draft : Request changes\nReview --> Approved : Approve\nReview --> Rejected : Reject\nApproved --> Published : Publish\nPublished --> Archived : Archive\nRejected --> Draft : Revise\nArchived --> [*]\n@enduml"
+  },
+  {
+    "slug": "state-with-nested-states",
+    "name": "State with Nested States",
+    "description": "State diagram with composite states.",
+    "diagram_type": "state",
+    "sort_order": 2,
+    "content": "@startuml\n[*] --> Active\n\nstate Active {\n    [*] --> Idle\n    Idle --> Processing : receive job\n    Processing --> Idle : job complete\n    Processing --> Error : failure\n\n    state Error {\n        [*] --> Retrying\n        Retrying --> Retrying : retry\n        Retrying --> [*] : max retries\n    }\n\n    Error --> Idle : recovered\n}\n\nActive --> Shutdown : stop signal\nShutdown --> [*]\n@enduml"
+  },
+  {
+    "slug": "deployment-diagram",
+    "name": "Deployment Diagram",
+    "description": "Infrastructure deployment layout.",
+    "diagram_type": "deployment",
+    "sort_order": 1,
+    "content": "@startuml\nnode \"Load Balancer\" as lb {\n    [Nginx]\n}\n\nnode \"App Server 1\" as app1 {\n    [FastAPI]\n    [Uvicorn]\n}\n\nnode \"App Server 2\" as app2 {\n    [FastAPI] as api2\n    [Uvicorn] as uv2\n}\n\nnode \"Database Server\" as dbsrv {\n    database \"PostgreSQL\" as db\n    database \"Redis\" as redis\n}\n\nlb --> app1 : HTTP\nlb --> app2 : HTTP\napp1 --> dbsrv\napp2 --> dbsrv\n@enduml"
+  },
+  {
+    "slug": "er-diagram",
+    "name": "ER Diagram",
+    "description": "Entity-relationship diagram for a database.",
+    "diagram_type": "entity_relationship",
+    "sort_order": 1,
+    "content": "@startuml\nentity \"User\" as user {\n    *id : bigint <<PK>>\n    --\n    *email : varchar\n    *username : varchar\n    display_name : varchar\n    created_at : timestamptz\n}\n\nentity \"Document\" as doc {\n    *id : bigint <<PK>>\n    --\n    *title : text\n    *owner_id : bigint <<FK>>\n    folder_id : bigint <<FK>>\n    current_content : text\n    updated_at : timestamptz\n}\n\nentity \"Folder\" as folder {\n    *id : bigint <<PK>>\n    --\n    *name : text\n    *owner_id : bigint <<FK>>\n}\n\nuser ||--o{ doc : owns\nuser ||--o{ folder : owns\nfolder ||--o{ doc : contains\n@enduml"
+  },
+  {
+    "slug": "gantt-chart",
+    "name": "Gantt Chart",
+    "description": "Project timeline with tasks and dependencies.",
+    "diagram_type": "gantt",
+    "sort_order": 1,
+    "content": "@startgantt\nProject starts 2026-01-01\n[Design] lasts 10 days\n[Backend Development] lasts 15 days\n[Backend Development] starts at [Design]'s end\n[Frontend Development] lasts 15 days\n[Frontend Development] starts at [Design]'s end\n[Integration Testing] lasts 5 days\n[Integration Testing] starts at [Backend Development]'s end\n[Integration Testing] starts at [Frontend Development]'s end\n[Deployment] lasts 3 days\n[Deployment] starts at [Integration Testing]'s end\n@endgantt"
+  },
+  {
+    "slug": "mindmap",
+    "name": "Mindmap",
+    "description": "Hierarchical mindmap diagram.",
+    "diagram_type": "mindmap",
+    "sort_order": 1,
+    "content": "@startmindmap\n* Project Planning\n** Requirements\n*** User Stories\n*** Acceptance Criteria\n*** Priority Matrix\n** Design\n*** Architecture\n*** Database Schema\n*** API Specification\n*** UI Mockups\n** Development\n*** Backend\n*** Frontend\n*** Testing\n** Deployment\n*** Staging\n*** Production\n*** Monitoring\n@endmindmap"
+  },
+  {
+    "slug": "json-visualization",
+    "name": "JSON Visualization",
+    "description": "Visual representation of a JSON structure.",
+    "diagram_type": "json",
+    "sort_order": 1,
+    "content": "@startjson\n{\n    \"user\": {\n        \"id\": 1,\n        \"name\": \"Alice\",\n        \"email\": \"alice@example.com\",\n        \"roles\": [\"admin\", \"editor\"],\n        \"preferences\": {\n            \"theme\": \"dark\",\n            \"language\": \"en\"\n        }\n    }\n}\n@endjson"
+  },
+  {
+    "slug": "network-diagram",
+    "name": "Network Diagram",
+    "description": "Network topology using nwdiag.",
+    "diagram_type": "network",
+    "sort_order": 1,
+    "content": "@startuml\nnwdiag {\n    internet [shape = cloud];\n    internet -- dmz\n\n    network dmz {\n        address = \"10.0.1.0/24\"\n\n        web01 [address = \"10.0.1.1\"];\n        web02 [address = \"10.0.1.2\"];\n    }\n\n    network internal {\n        address = \"10.0.2.0/24\"\n\n        web01 [address = \"10.0.2.1\"];\n        web02 [address = \"10.0.2.2\"];\n        db01 [address = \"10.0.2.100\"];\n    }\n}\n@enduml"
+  },
+  {
+    "slug": "wireframe-salt",
+    "name": "Wireframe (Salt)",
+    "description": "UI wireframe mockup using Salt.",
+    "diagram_type": "wireframe",
+    "sort_order": 1,
+    "content": "@startsalt\n{+\n    Login\n    ==\n    {\n        Email    | \"user@example.com   \"\n        Password | \"****               \"\n    }\n    [  Cancel  ] | [  **Login**  ]\n    ---\n    <i>Forgot password?</i>\n}\n@endsalt"
+  }
+]

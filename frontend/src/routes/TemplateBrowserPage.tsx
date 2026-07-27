@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import {
   listTemplates,
   getTemplate,
   getTemplatePreviewUrl,
+  templateSlug,
   type TemplateListItem,
   type TemplateDetail,
 } from "@/lib/templates";
@@ -296,6 +297,13 @@ function TemplateCard({
         <p className="text-xs text-muted-foreground line-clamp-2">
           {template.description}
         </p>
+        <Link
+          to={`/templates/${templateSlug(template.name)}`}
+          className="text-xs text-primary hover:underline inline-block mt-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          View details →
+        </Link>
       </div>
     </div>
   );
