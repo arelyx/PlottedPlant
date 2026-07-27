@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import Editor from "@monaco-editor/react";
 import { registerPlantUMLLanguage } from "@/lib/plantuml-monaco";
 import {
@@ -60,6 +61,7 @@ export function SharedDocumentPage() {
   }, [user, isLoaded, load]);
 
   const [data, setData] = useState<PublicDocumentAccess | null>(null);
+  usePageTitle(data?.document.title);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [content, setContent] = useState("");
   const [duplicating, setDuplicating] = useState(false);

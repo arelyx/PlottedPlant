@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -38,6 +39,7 @@ const DIAGRAM_TYPES = [
 ];
 
 export function TemplateBrowserPage() {
+  usePageTitle("PlantUML Templates & Examples");
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [templates, setTemplates] = useState<TemplateListItem[]>([]);
