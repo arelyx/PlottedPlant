@@ -242,9 +242,11 @@ export function TemplateBrowserPage() {
               )}
               <Button
                 variant="outline"
-                onClick={() => setPreviewTemplate(null)}
+                onClick={() =>
+                  navigate(`/templates/${templateSlug(previewTemplate.name)}`)
+                }
               >
-                Cancel
+                View Template
               </Button>
               <Button
                 onClick={() =>
