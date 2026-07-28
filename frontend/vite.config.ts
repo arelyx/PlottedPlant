@@ -66,14 +66,14 @@ function plantumlVendor(): Plugin {
   };
 }
 
-// ── SEO prerendering + sitemap ──
+// ── SEO head tags + sitemap ──
 // The app is a client-rendered SPA, so crawlers fetching /templates or
 // /templates/<slug> would otherwise get the generic shell. After the bundle
 // is written, this plugin copies dist/index.html once per public template
-// page, rewrites the head tags (title/description/canonical/og/twitter) and
-// injects real static markup inside #root — React's createRoot() replaces it
-// on mount, so users see the app while crawlers see content. It also emits
-// sitemap.xml listing every public URL. Template data comes from
+// page and rewrites the head tags (title/description/canonical/og/twitter).
+// No visible markup is injected — an earlier version put static content in
+// #root, but it flashed as unstyled text until the bundle loaded. It also
+// emits sitemap.xml listing every public URL. Template data comes from
 // src/data/templates.json (regenerate with backend export_templates.py —
 // see that file's docstring).
 const SITE_ORIGIN = "https://plottedplant.com";
@@ -94,7 +94,7 @@ function escapeHtml(s: string): string {
 
 function rewriteShell(
   shell: string,
-  opts: { title: string; description: string; path: string; rootHtml: string }
+  opts: { title: string; description: string; path: string }
 ): string {
   const url = `${SITE_ORIGIN}${opts.path}`;
   const title = escapeHtml(opts.title);
@@ -117,7 +117,6 @@ function rewriteShell(
       /(<meta\s+name="twitter:description"\s+content=")[\s\S]*?("\s*\/>)/,
       `$1${desc}$2`,
     ],
-    [/<div id="root"><\/div>/, `<div id="root">${opts.rootHtml}</div>`],
   ];
   let out = shell;
   for (const [pattern, replacement] of replacements) {
@@ -140,22 +139,6 @@ function seoPrerender(): Plugin {
       const shell = fs.readFileSync(path.join(distDir, "index.html"), "utf8");
 
       // /templates gallery page
-      const galleryHtml = `
-        <main>
-          <h1>Free PlantUML Templates &amp; Examples</h1>
-          <p>Ready-to-use PlantUML diagram templates. Preview each example and
-          open it in the free online PlottedPlant editor.</p>
-          <ul>
-            ${templates
-              .map(
-                (t) =>
-                  `<li><a href="/templates/${t.slug}">${escapeHtml(t.name)} (${escapeHtml(
-                    t.diagram_type.replace(/_/g, " ")
-                  )} diagram)</a> — ${escapeHtml(t.description)}</li>`
-              )
-              .join("\n            ")}
-          </ul>
-        </main>`;
       fs.writeFileSync(
         path.join(distDir, "templates", "index.html"),
         rewriteShell(shell, {
@@ -163,22 +146,12 @@ function seoPrerender(): Plugin {
           description:
             "Browse free PlantUML templates and examples: sequence, class, activity, state, component, deployment, and use case diagrams. Preview each one and open it in the free PlottedPlant editor.",
           path: "/templates",
-          rootHtml: galleryHtml,
         })
       );
 
       // /templates/<slug> detail pages
       for (const t of templates) {
         const typeLabel = t.diagram_type.replace(/_/g, " ");
-        const pageHtml = `
-        <main>
-          <nav><a href="/templates">Template Library</a></nav>
-          <h1>${escapeHtml(t.name)} PlantUML Template</h1>
-          <p>${escapeHtml(t.description)} A free ${escapeHtml(typeLabel)} diagram
-          template you can preview and edit online with PlottedPlant.</p>
-          <img src="/templates/${t.slug}.svg" alt="${escapeHtml(t.name)} PlantUML diagram example" />
-          <p><a href="/">Open the free PlantUML editor</a></p>
-        </main>`;
         const dir = path.join(distDir, "templates", t.slug);
         fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(
@@ -187,7 +160,6 @@ function seoPrerender(): Plugin {
             title: `${t.name} PlantUML Template – PlottedPlant`,
             description: `${t.description} Free PlantUML ${typeLabel} diagram template — preview the rendered diagram, copy the source, and edit it online with PlottedPlant.`,
             path: `/templates/${t.slug}`,
-            rootHtml: pageHtml,
           })
         );
       }
@@ -218,7 +190,7 @@ ${urls
 `;
       fs.writeFileSync(path.join(distDir, "sitemap.xml"), sitemap);
       this.info(
-        `seo-prerender: wrote sitemap.xml and ${templates.length + 1} prerendered pages`
+        `seo-prerender: wrote sitemap.xml and per-page head tags for ${templates.length + 1} pages`
       );
     },
   };
