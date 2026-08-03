@@ -24,6 +24,32 @@ if (!INTERNAL_SECRET) {
   process.exit(1);
 }
 
+// Defense-in-depth process guards (issue #128).
+// Hocuspocus invokes some lifecycle hooks (e.g. onStoreDocument) via un-awaited
+// internal calls, so a rejected hook promise surfaces as an unhandledRejection
+// rather than being caught at the call site. Without a handler, Node's default
+// is to terminate the process — which would drop EVERY connected room and user
+// over a single doc's failure. These guards ensure no one hook or library edge
+// can take the collaboration server down for everyone.
+process.on("unhandledRejection", (reason) => {
+  // Log loudly and keep serving other rooms — do not exit.
+  logger.error("Unhandled promise rejection (kept process alive):", reason);
+});
+process.on("uncaughtException", (err) => {
+  // Unlike a rejected promise, a synchronous uncaughtException means an
+  // exception escaped ALL try/catch. Node's own guidance is explicit: it is NOT
+  // safe to resume normal operation afterwards — the process may be in an
+  // undefined/corrupted state, and continuing risks silently serving corrupt
+  // data to the OTHER rooms (worse than a restart: clients reconnect and reload
+  // from the DB, the source of truth). The #128 crash is an unhandledRejection
+  // (handled above and kept alive), so this last-resort backstop does the safe
+  // thing instead: log loudly and exit non-zero so Docker's
+  // `restart: unless-stopped` gives a clean, fast (~730ms) restart rather than
+  // leaving a silently-degraded process serving every room.
+  logger.error("Uncaught exception — exiting for a clean restart:", err);
+  process.exit(1);
+});
+
 // Hocuspocus WebSocket server with all lifecycle hooks
 const hocuspocus = Server.configure({
   port: WEBSOCKET_PORT,
