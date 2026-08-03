@@ -39,9 +39,18 @@ def _content_disposition(title: str, ext: str) -> str:
     Includes a sanitized ASCII `filename=` (always latin-1 safe, for clients
     without RFC 5987 support) alongside a `filename*=UTF-8''...` form that
     carries the original, non-ASCII-preserving title for clients that do.
+
+    The `filename*` value is percent-encoded, so raw control characters and
+    path separators can never reach the header itself. But some clients
+    naively decode `filename*` and reuse it as a filesystem path without
+    further sanitization, so `/`, `\\`, and control characters are stripped
+    from the title first as defense in depth (this value didn't exist before
+    this fix, so it's new attack surface worth closing here rather than
+    relying on every downstream consumer to do it).
     """
     ascii_filename = f"{_slugify(title)}.{ext}"
-    utf8_filename = f"{title.strip() or 'diagram'}.{ext}"
+    safe_title = re.sub(r"[\x00-\x1f\x7f/\\]", "", title.strip())
+    utf8_filename = f"{safe_title or 'diagram'}.{ext}"
     encoded_utf8_filename = quote(utf8_filename, safe="")
     return f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_utf8_filename}'
 
