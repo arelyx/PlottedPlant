@@ -1,5 +1,10 @@
 from pydantic import BaseModel, Field
 
+from app.schemas.validators import NoNulStr
+
+# BIGINT column bound (users.id is BigInteger).
+_BIGINT_MAX = 9223372036854775807
+
 
 class AuthValidateRequest(BaseModel):
     token: str
@@ -15,8 +20,8 @@ class AuthValidateResponse(BaseModel):
 
 
 class SyncRequest(BaseModel):
-    content: str = Field(max_length=500_000)
-    edited_by_user_id: int | None = None
+    content: NoNulStr = Field(max_length=500_000)
+    edited_by_user_id: int | None = Field(default=None, ge=1, le=_BIGINT_MAX)
 
 
 class SyncResponse(BaseModel):

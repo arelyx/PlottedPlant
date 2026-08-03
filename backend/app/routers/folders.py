@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +18,9 @@ from app.services.collaboration import notify_close_room
 from app.services.document import is_folder_shared, resolve_folder_permission
 
 router = APIRouter(prefix="/api/v1/folders", tags=["folders"])
+
+# folders.id is a BIGINT column.
+_BIGINT_MAX = 9223372036854775807
 
 
 def _folder_to_response(
@@ -128,7 +131,7 @@ async def create_folder(
 
 @router.get("/{folder_id}", response_model=FolderDetailResponse)
 async def get_folder(
-    folder_id: int,
+    folder_id: int = Path(..., ge=1, le=_BIGINT_MAX),
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -178,8 +181,8 @@ async def get_folder(
 
 @router.patch("/{folder_id}", response_model=FolderResponse)
 async def rename_folder(
-    folder_id: int,
     body: FolderUpdateRequest,
+    folder_id: int = Path(..., ge=1, le=_BIGINT_MAX),
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -210,7 +213,7 @@ async def rename_folder(
 
 @router.delete("/{folder_id}", status_code=204)
 async def delete_folder(
-    folder_id: int,
+    folder_id: int = Path(..., ge=1, le=_BIGINT_MAX),
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):

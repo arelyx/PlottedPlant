@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,6 +7,10 @@ from app.models.template import Template
 from app.schemas.template import TemplateDetail, TemplateListItem, TemplateListResponse
 
 router = APIRouter(prefix="/api/v1/templates", tags=["templates"])
+
+# templates.id is an int32 Postgres column (same overflow shape as
+# document_versions.version_number — see versions.py).
+_INT32_MAX = 2147483647
 
 
 @router.get("", response_model=TemplateListResponse)
@@ -43,7 +47,7 @@ async def list_templates(
 
 @router.get("/{template_id}", response_model=TemplateDetail)
 async def get_template(
-    template_id: int,
+    template_id: int = Path(..., ge=1, le=_INT32_MAX),
     db: AsyncSession = Depends(get_db),
 ):
     """Get a single template with its content."""

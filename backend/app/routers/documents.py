@@ -35,6 +35,9 @@ router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 
 DEFAULT_CONTENT = "@startuml\n\n@enduml"
 
+# folders.id / documents.folder_id are BIGINT columns.
+_BIGINT_MAX = 9223372036854775807
+
 
 async def _validate_folder_ownership(db: AsyncSession, folder_id: int, user_id: int) -> Folder:
     """Validate that the user owns the given folder. Raises 404 if not found/not owned."""
@@ -58,7 +61,7 @@ async def list_documents(
     order: str = Query("desc", pattern="^(asc|desc)$"),
     search: str | None = Query(None, description="Filter by title (case-insensitive)"),
     limit: int = Query(50, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=_BIGINT_MAX),
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -119,6 +122,13 @@ async def list_documents(
         try:
             fid = int(folder_id)
         except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid folder_id")
+        # folder_id is a raw string param (it also accepts "root"), so it
+        # isn't bound by FastAPI's Query(le=...) validation — an in-range-for-
+        # Python but out-of-range-for-BIGINT value parses fine here and only
+        # overflows later at asyncpg bind time (500). Reject it the same way
+        # a non-numeric value is rejected.
+        if not (1 <= fid <= _BIGINT_MAX):
             raise HTTPException(status_code=400, detail="Invalid folder_id")
         query = query.where(Document.folder_id == fid)
 

@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +35,9 @@ from app.services.document import (
 from app.utils.email import mask_email
 
 router = APIRouter(prefix="/api/v1", tags=["sharing"])
+
+# document_shares.id / folder_shares.id / folders.id are BIGINT columns.
+_BIGINT_MAX = 9223372036854775807
 
 
 # ---------------------------------------------------------------------------
@@ -215,8 +218,8 @@ async def create_document_share(
 @router.patch("/documents/{document_id}/shares/{share_id}", response_model=ShareResponse)
 async def update_document_share(
     document_id: str,
-    share_id: int,
     body: UpdateShareRequest,
+    share_id: int = Path(..., ge=1, le=_BIGINT_MAX),
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -254,7 +257,7 @@ async def update_document_share(
 @router.delete("/documents/{document_id}/shares/{share_id}", status_code=204)
 async def delete_document_share(
     document_id: str,
-    share_id: int,
+    share_id: int = Path(..., ge=1, le=_BIGINT_MAX),
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -286,7 +289,7 @@ async def delete_document_share(
 
 @router.get("/folders/{folder_id}/shares", response_model=ShareListResponse)
 async def list_folder_shares(
-    folder_id: int,
+    folder_id: int = Path(..., ge=1, le=_BIGINT_MAX),
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -333,8 +336,8 @@ async def list_folder_shares(
     status_code=201,
 )
 async def create_folder_share(
-    folder_id: int,
     body: CreateShareRequest,
+    folder_id: int = Path(..., ge=1, le=_BIGINT_MAX),
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -407,9 +410,9 @@ async def create_folder_share(
 
 @router.patch("/folders/{folder_id}/shares/{share_id}", response_model=ShareResponse)
 async def update_folder_share(
-    folder_id: int,
-    share_id: int,
     body: UpdateShareRequest,
+    folder_id: int = Path(..., ge=1, le=_BIGINT_MAX),
+    share_id: int = Path(..., ge=1, le=_BIGINT_MAX),
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -448,8 +451,8 @@ async def update_folder_share(
 
 @router.delete("/folders/{folder_id}/shares/{share_id}", status_code=204)
 async def delete_folder_share(
-    folder_id: int,
-    share_id: int,
+    folder_id: int = Path(..., ge=1, le=_BIGINT_MAX),
+    share_id: int = Path(..., ge=1, le=_BIGINT_MAX),
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
