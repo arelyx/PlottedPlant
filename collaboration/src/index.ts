@@ -24,6 +24,26 @@ if (!INTERNAL_SECRET) {
   process.exit(1);
 }
 
+// Defense-in-depth process guards (issue #128).
+// Hocuspocus invokes some lifecycle hooks (e.g. onStoreDocument) via un-awaited
+// internal calls, so a rejected hook promise surfaces as an unhandledRejection
+// rather than being caught at the call site. Without a handler, Node's default
+// is to terminate the process — which would drop EVERY connected room and user
+// over a single doc's failure. These guards ensure no one hook or library edge
+// can take the collaboration server down for everyone.
+process.on("unhandledRejection", (reason) => {
+  // Log loudly and keep serving other rooms — do not exit.
+  logger.error("Unhandled promise rejection (kept process alive):", reason);
+});
+process.on("uncaughtException", (err) => {
+  // Tradeoff: swallowing every uncaughtException can mask a genuinely fatal
+  // state (corrupted memory, etc.) and is generally discouraged. For THIS
+  // server the priority is keeping the many other in-memory rooms alive, so we
+  // log loudly and continue rather than exit and disconnect everyone. If a
+  // future failure mode proves truly unrecoverable, revisit exiting here.
+  logger.error("Uncaught exception (kept process alive):", err);
+});
+
 // Hocuspocus WebSocket server with all lifecycle hooks
 const hocuspocus = Server.configure({
   port: WEBSOCKET_PORT,

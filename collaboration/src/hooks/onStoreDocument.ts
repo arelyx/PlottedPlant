@@ -69,7 +69,7 @@ export async function onStoreDocument({
   // A mid-session store failure is retried on the next debounce (the hash is
   // left unchanged). The session-ending store has no next cycle — Hocuspocus
   // destroys the ephemeral Y.Doc right after — so retry it in-hook before
-  // giving up, then rethrow so the failure is surfaced rather than swallowed.
+  // giving up, then log the exhaustion loudly (see below) rather than rethrow.
   const attempts = isSessionEnd ? SESSION_END_RETRY_DELAYS_MS.length + 1 : 1;
   let lastErr: unknown;
 
@@ -106,12 +106,22 @@ export async function onStoreDocument({
   }
 
   // All attempts failed. Leave last_persisted_hash and is_session_ending
-  // untouched. For a session end, rethrow so Hocuspocus records the failure
-  // instead of silently unloading unsaved edits.
+  // untouched. We deliberately do NOT rethrow here (issue #128): Hocuspocus
+  // invokes onStoreDocument via an un-awaited internal call, so a throw becomes
+  // an unhandled promise rejection that crashes the whole Node process —
+  // dropping every connected document and user, not just this one. Losing one
+  // doc's session-end save is far less bad than taking down the server for
+  // everyone, so we log the exhaustion very loudly and return normally.
+  //
+  // TODO(#128): a durable dead-letter queue for failed session-end saves would
+  // let us recover these edits later instead of only logging them. Not built
+  // here to keep the fix surgical.
   if (isSessionEnd) {
     logger.error(
-      `Document ${documentName}: session-end persist failed after ${attempts} attempts — edits may be lost`,
+      `Document ${documentName}: session-end persist FAILED after ${attempts} attempts — unsaved edits may be lost. ` +
+        `Not rethrowing (would crash the whole collaboration server). Last error:`,
+      lastErr,
     );
-    throw lastErr;
+    return;
   }
 }
