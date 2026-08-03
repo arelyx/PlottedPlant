@@ -178,6 +178,13 @@ app.post("/internal/documents/:id/force-content", (req, res) => {
   // the next onStoreDocument re-persist the restored text (a no-op version at
   // worst if the DB already holds it).
 
+  // Fence off pre-restore debounced stores: bump the content revision so an
+  // onStoreDocument that snapshotted the Y.Doc *before* this replacement can
+  // detect it is stale and re-persist the restored content instead of
+  // clobbering the DB with the old snapshot (issue #132).
+  const meta = (doc as any).meta;
+  if (meta) meta.content_revision = (meta.content_revision ?? 0) + 1;
+
   logger.info(
     `Force-content applied to document ${documentId} (version ${version_number} by ${restored_by})`,
   );

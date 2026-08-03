@@ -298,39 +298,50 @@ async def restore_version(
     )
     target_content = target_content_result.scalar_one()
 
-    # No-op if the document already holds the target content — restoring would
-    # otherwise burn two version numbers on identical content.
-    if target_version.content_hash == doc.current_content_hash:
-        return RestoreResponse(
-            restored_to_version=version_number,
-            pre_restore_version=doc.version_counter,
-            post_restore_version=doc.version_counter,
-            content=target_content,
+    # `doc.current_content_hash` is the *persisted* (DB) hash. While editors are
+    # connected the authoritative content is the in-memory Y.Doc, which can hold
+    # unflushed edits that differ from the DB. So a DB-hash match does NOT mean
+    # the live document already holds the target content — treating it as a
+    # silent no-op (returning without touching the Y.Doc) lets a pending edit
+    # win and the restore is lost (issue #132).
+    #
+    # We therefore only use the DB-hash match to avoid burning two version
+    # numbers on identical persisted content; we still fire notify_force_content
+    # below on BOTH paths so any live Y.Doc is driven back to the target and the
+    # force-content revision bump fences off pre-restore debounced stores.
+    already_persisted = target_version.content_hash == doc.current_content_hash
+
+    if already_persisted:
+        # DB already holds the target content — don't create duplicate versions,
+        # but still converge any live Y.Doc via force-content below.
+        pre_restore_version = doc.version_counter
+        post_restore_version = doc.version_counter
+    else:
+        # Step 1: Save current content as pre-restore version
+        pre_restore_version = await create_version(
+            db,
+            doc.id,
+            doc.current_content,
+            user_id,
+            source="restore",
+            label=f"Auto-saved before restore to version {version_number}",
         )
 
-    # Step 1: Save current content as pre-restore version
-    pre_restore_version = await create_version(
-        db,
-        doc.id,
-        doc.current_content,
-        user_id,
-        source="restore",
-        label=f"Auto-saved before restore to version {version_number}",
-    )
+        # Step 2 & 3: Replace document content with target version
+        post_restore_version = await create_version(
+            db,
+            doc.id,
+            target_content,
+            user_id,
+            source="restore",
+            label=f"Restored from version {version_number}",
+        )
 
-    # Step 2 & 3: Replace document content with target version
-    post_restore_version = await create_version(
-        db,
-        doc.id,
-        target_content,
-        user_id,
-        source="restore",
-        label=f"Restored from version {version_number}",
-    )
+        await db.commit()
 
-    await db.commit()
-
-    # Notify Hocuspocus to push restored content to active collaborators
+    # Notify Hocuspocus to push restored content to active collaborators. This
+    # runs on BOTH paths (including the already-persisted no-op) because a live
+    # Y.Doc may hold divergent unflushed edits that must be reset to the target.
     user_result = await db.execute(select(User.display_name).where(User.id == user_id))
     display_name = user_result.scalar_one_or_none() or "Unknown"
     await notify_force_content(
