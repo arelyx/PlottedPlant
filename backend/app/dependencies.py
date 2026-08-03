@@ -11,7 +11,17 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.config import settings
 from app.utils.clerk import get_or_provision_user, verify_clerk_token
 
-engine = create_async_engine(settings.database_url, echo=settings.app_env == "development")
+# Explicit pool sizing — see the db_pool_* settings in app/config.py for the
+# max_connections math and why pool_timeout must stay under nginx's read timeout.
+engine = create_async_engine(
+    settings.database_url,
+    echo=settings.app_env == "development",
+    pool_size=settings.db_pool_size,
+    max_overflow=settings.db_max_overflow,
+    pool_timeout=settings.db_pool_timeout,
+    pool_recycle=settings.db_pool_recycle,
+    pool_pre_ping=True,
+)
 async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
 redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)

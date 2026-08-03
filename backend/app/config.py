@@ -33,6 +33,19 @@ class Settings(BaseSettings):
     # Interval between background maintenance sweeps (orphaned-content GC).
     maintenance_interval_seconds: int = 21600  # 6 hours
 
+    # DB connection pool (per uvicorn worker; there are 4 — see backend/Dockerfile).
+    # Keep 4 * (db_pool_size + db_max_overflow) comfortably under Postgres
+    # `max_connections` (100, see postgres/postgresql.conf), leaving headroom for
+    # the maintenance loop and collaboration's internal calls: 4 * (8 + 8) = 64/100.
+    # db_pool_timeout must stay BELOW nginx's `proxy_read_timeout` (30s, see
+    # nginx/nginx.conf) so the backend's structured 503 reaches the client before
+    # nginx gives up and returns a bare 504. Do not raise this past ~25s without
+    # also raising the nginx timeout.
+    db_pool_size: int = 8
+    db_max_overflow: int = 8
+    db_pool_timeout: int = 20
+    db_pool_recycle: int = 1800
+
     # Public
     public_url: str = "http://localhost"
     cors_origins: str = "http://localhost"
