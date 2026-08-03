@@ -32,6 +32,7 @@ from app.services.document import (
     resolve_document_permission,
     resolve_folder_permission,
 )
+from app.utils.email import mask_email
 
 router = APIRouter(prefix="/api/v1", tags=["sharing"])
 
@@ -49,7 +50,7 @@ async def _get_share_user(db: AsyncSession, user_id: int) -> ShareUser:
         id=user.id,
         username=user.username,
         display_name=user.display_name,
-        email=user.email,
+        email=mask_email(user.email),
         avatar_url=user.avatar_url,
     )
 
@@ -199,7 +200,7 @@ async def create_document_share(
         id=target_user.id,
         username=target_user.username,
         display_name=target_user.display_name,
-        email=target_user.email,
+        email=mask_email(target_user.email),
         avatar_url=target_user.avatar_url,
     )
 
@@ -392,7 +393,7 @@ async def create_folder_share(
         id=target_user.id,
         username=target_user.username,
         display_name=target_user.display_name,
-        email=target_user.email,
+        email=mask_email(target_user.email),
         avatar_url=target_user.avatar_url,
     )
 

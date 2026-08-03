@@ -12,18 +12,9 @@ from app.schemas.user import (
     UserSearchResponse,
     UserUpdateRequest,
 )
+from app.utils.email import mask_email as _mask_email
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
-
-
-def _mask_email(email: str) -> str:
-    """Partially mask an email so search results can disambiguate a user
-    without exposing full addresses for bulk harvesting."""
-    local, sep, domain = email.partition("@")
-    if not sep:
-        return "***"
-    masked_local = (local[0] + "***") if local else "***"
-    return f"{masked_local}@{domain}"
 
 
 @router.get("/me")
