@@ -54,8 +54,17 @@ export async function onStoreDocument({
     // consistent snapshot of the Y.Doc at this instant.
     const revisionAtSnapshot = meta.content_revision;
 
-    // Skip no-op writes
-    if (currentHash === meta.last_persisted_hash) {
+    // Skip no-op writes — but only on the first pass (resnapshot === 0). A
+    // resnapshot pass is entered only after we detected a restore mid-flight
+    // (see the `continue resnapshotLoop` below), which means our *previous*,
+    // now-stale write may have landed in the DB out of order — after a
+    // concurrent store already stamped last_persisted_hash to the current
+    // content. In that state last_persisted_hash no longer means "the DB holds
+    // this"; trusting it here would skip the corrective write and leave the DB
+    // permanently holding pre-restore content. So on a corrective pass we force
+    // the persist (a harmless dedup no-op if the DB already has it) to guarantee
+    // the authoritative Y.Doc content is the last write to reach the DB (#132).
+    if (resnapshot === 0 && currentHash === meta.last_persisted_hash) {
       logger.debug(`Document ${documentName}: content unchanged, skipping persist`);
       if (meta.is_session_ending) {
         meta.is_session_ending = false;
