@@ -1,4 +1,13 @@
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Identity, Text
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Identity,
+    Index,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -21,4 +30,16 @@ class DocumentShare(Base):
     )
     created_at: Mapped[str] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    # Declared to match the DB schema created in migration 0004 so that
+    # `alembic revision --autogenerate` sees them as already present and does
+    # not stage spurious DROPs.
+    __table_args__ = (
+        UniqueConstraint("document_id", "shared_with_id", name="uq_doc_share_user"),
+        CheckConstraint(
+            "permission IN ('editor', 'viewer')", name="ck_doc_share_permission"
+        ),
+        Index("idx_doc_shares_user", "shared_with_id"),
+        Index("idx_doc_shares_doc", "document_id"),
     )

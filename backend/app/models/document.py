@@ -23,8 +23,14 @@ class Document(Base):
     owner_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
+    # ON DELETE CASCADE matches the ORM `Folder.documents` relationship
+    # (cascade="all, delete-orphan"): deleting a folder deletes its documents
+    # via both the ORM path and any raw SQL / FK-driven delete. To MOVE a
+    # document between folders, set this scalar `folder_id` (as the routers do)
+    # — never detach it from the `Folder.documents` collection, or delete-orphan
+    # will silently delete the row.
     folder_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("folders.id", ondelete="SET NULL"), nullable=True
+        BigInteger, ForeignKey("folders.id", ondelete="CASCADE"), nullable=True
     )
     current_content: Mapped[str] = mapped_column(
         Text, nullable=False, server_default=text("'@startuml' || E'\\n\\n' || '@enduml'")
