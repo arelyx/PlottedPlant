@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import BigInteger, Text, func, literal, literal_column, or_, select, union_all
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user_id, get_db, parse_document_uuid
@@ -247,7 +248,16 @@ async def create_document(
         last_edited_by=user_id,
     )
     db.add(doc)
-    await db.flush()  # Get the ID without committing
+    try:
+        await db.flush()  # Get the ID without committing
+    except IntegrityError:
+        # The folder existed at validation time but was deleted before this
+        # insert (TOCTOU) — same race as update_document's commit path.
+        await db.rollback()
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "FOLDER_NOT_FOUND", "message": "Folder not found or you don't own it."},
+        )
 
     # Create initial version (version 1)
     version_number = await create_version(
@@ -355,7 +365,18 @@ async def update_document(
             await _validate_folder_ownership(db, body.folder_id, user_id)
             doc.folder_id = body.folder_id
 
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # The folder existed at validation time but was deleted before commit
+        # (TOCTOU). The FK violation is the only integrity error reachable
+        # from this commit, so surface it as the same 404 the upfront
+        # ownership check would have raised.
+        await db.rollback()
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "FOLDER_NOT_FOUND", "message": "Folder not found or you don't own it."},
+        )
     await db.refresh(doc)
 
     # Return full detail response (reuse get_document logic)
@@ -426,7 +447,16 @@ async def duplicate_document(
         last_edited_by=user_id,
     )
     db.add(new_doc)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        # The folder existed at validation time but was deleted before this
+        # insert (TOCTOU) — same race as update_document's commit path.
+        await db.rollback()
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "FOLDER_NOT_FOUND", "message": "Folder not found or you don't own it."},
+        )
 
     version_number = await create_version(
         db, new_doc.id, content, user_id, source="manual"

@@ -689,7 +689,13 @@ async def duplicate_public_link(
         last_edited_by=user_id,
     )
     db.add(new_doc)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        # The folder existed at validation time but was deleted before this
+        # insert (TOCTOU) — same race as documents.update_document's commit path.
+        await db.rollback()
+        raise HTTPException(status_code=404, detail="Folder not found")
 
     version_number = await create_version(
         db, new_doc.id, content, user_id, source="manual"
