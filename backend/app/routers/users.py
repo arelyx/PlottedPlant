@@ -58,14 +58,17 @@ async def search_users(
     """Search users by username or email prefix for the sharing dialog."""
     from sqlalchemy import or_
 
-    pattern = f"{q.lower()}%"
+    # Escape LIKE wildcards so a literal % or _ in the query matches
+    # literally instead of acting as a wildcard.
+    escaped = q.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    pattern = f"{escaped}%"
     result = await db.execute(
         select(User)
         .where(
             User.id != user.id,
             or_(
-                func.lower(User.username).like(pattern),
-                func.lower(User.email).like(pattern),
+                func.lower(User.username).like(pattern, escape="\\"),
+                func.lower(User.email).like(pattern, escape="\\"),
             ),
         )
         .order_by(User.username)
