@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +25,9 @@ from app.services.document import (
 )
 
 router = APIRouter(prefix="/api/v1/documents", tags=["versions"])
+
+# version_number is an int32 Postgres column (document_versions.version_number).
+_INT32_MAX = 2147483647
 
 
 async def _get_user_brief(db: AsyncSession, user_id: int | None) -> UserBrief | None:
@@ -78,6 +81,11 @@ async def list_versions(
             cursor_version = int(cursor)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid cursor format")
+        # version_number is int32; an out-of-range cursor parses fine as a
+        # Python int but overflows at asyncpg bind time (500), so reject it
+        # the same way an invalid cursor is rejected.
+        if not (1 <= cursor_version <= _INT32_MAX):
+            raise HTTPException(status_code=400, detail="Invalid cursor format")
         query = query.where(DocumentVersion.version_number < cursor_version)
 
     # Fetch one extra to detect has_more
@@ -113,7 +121,7 @@ async def list_versions(
 )
 async def get_version(
     document_id: str,
-    version_number: int,
+    version_number: int = Path(..., ge=1, le=_INT32_MAX),
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -165,8 +173,8 @@ async def get_version(
 )
 async def get_version_diff(
     document_id: str,
-    version_number: int,
-    compare_to: int = Query(...),
+    version_number: int = Path(..., ge=1, le=_INT32_MAX),
+    compare_to: int = Query(..., ge=1, le=_INT32_MAX),
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -257,7 +265,7 @@ async def create_checkpoint(
 @router.post("/{document_id}/versions/{version_number}/restore", response_model=RestoreResponse)
 async def restore_version(
     document_id: str,
-    version_number: int,
+    version_number: int = Path(..., ge=1, le=_INT32_MAX),
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):

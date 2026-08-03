@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.schemas.validators import NoNulStr
+
 
 class UserBrief(BaseModel):
     id: int
@@ -39,7 +41,7 @@ class VersionDiffResponse(BaseModel):
 
 
 class CreateCheckpointRequest(BaseModel):
-    label: str = Field(min_length=1, max_length=200)
+    label: NoNulStr = Field(min_length=1, max_length=200)
 
 
 class CreateCheckpointResponse(BaseModel):

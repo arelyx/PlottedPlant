@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.schemas.validators import NoNulStr
+
 
 # --- Shared sub-models ---
 
@@ -20,11 +22,11 @@ class DocumentInFolder(BaseModel):
 # --- Request schemas ---
 
 class FolderCreateRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=255)
+    name: NoNulStr = Field(min_length=1, max_length=255)
 
 
 class FolderUpdateRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=255)
+    name: NoNulStr = Field(min_length=1, max_length=255)
 
 
 # --- Response schemas ---

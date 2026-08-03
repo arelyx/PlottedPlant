@@ -2,6 +2,9 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+# BIGINT column bound (users.id is BigInteger).
+_BIGINT_MAX = 9223372036854775807
+
 
 # --- Sub-models ---
 
@@ -24,7 +27,7 @@ class PublicLinkResponse(BaseModel):
 # --- Request schemas ---
 
 class CreateShareRequest(BaseModel):
-    user_id: int
+    user_id: int = Field(ge=1, le=_BIGINT_MAX)
     permission: str = Field(pattern="^(editor|viewer)$")
 
 
