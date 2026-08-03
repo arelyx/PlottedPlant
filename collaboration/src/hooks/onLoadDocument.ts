@@ -21,6 +21,11 @@ export interface DocumentMeta {
   // Set by close-room when the document is being deleted, so the disconnect
   // cascade doesn't persist a session_end version for a row that's gone.
   skip_persist: boolean;
+  // Monotonic counter bumped by force-content (version restore, see index.ts).
+  // onStoreDocument snapshots it alongside the text; if it advances while a
+  // store is in flight, that store's snapshot is pre-restore and must not be
+  // written as the document's latest state (issue #132).
+  content_revision: number;
 }
 
 export async function onLoadDocument({
@@ -58,6 +63,7 @@ export async function onLoadDocument({
     active_viewers: new Map(),
     is_session_ending: false,
     skip_persist: false,
+    content_revision: 0,
   };
   (document as any).meta = meta;
 
