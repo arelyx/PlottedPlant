@@ -7,11 +7,12 @@ JWTs (RS256, via the instance JWKS) and maps a Clerk subject to a local
 
 import logging
 import re
+import secrets
 
 import httpx
 import jwt
 from jwt import PyJWKClient
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -100,19 +101,17 @@ def _base_username(profile: dict, email: str | None) -> str:
     return raw[:25]
 
 
-async def _unique_username(db: AsyncSession, base: str) -> str:
-    for suffix in range(0, 10000):
-        candidate = base if suffix == 0 else f"{base}{suffix}"
-        candidate = candidate[:30]
-        taken = (
-            await db.execute(
-                select(User.id).where(func.lower(User.username) == candidate.lower())
-            )
-        ).scalar_one_or_none()
-        if taken is None:
-            return candidate
-    # Extremely unlikely; fall back to a clerk-id-derived tail.
-    return f"{base[:20]}{abs(hash(base)) % 100000}"[:30]
+_USERNAME_SUFFIX_LEN = 6  # hex chars -> 24 bits of entropy, plenty to avoid collisions
+
+
+def _random_username(base: str) -> str:
+    """Append a short random suffix to ``base`` so the candidate needs no
+    pre-insert collision check: collisions are astronomically unlikely, and
+    the DB's unique constraint is the final arbiter (see get_or_provision_user).
+    """
+    # Trim base to leave room for "-" + suffix while staying <= 30 chars.
+    trimmed = base[: 30 - 1 - _USERNAME_SUFFIX_LEN]
+    return f"{trimmed}-{secrets.token_hex(_USERNAME_SUFFIX_LEN // 2)}"
 
 
 async def get_or_provision_user(db: AsyncSession, claims: dict) -> User:
@@ -129,9 +128,10 @@ async def get_or_provision_user(db: AsyncSession, claims: dict) -> User:
     email = _primary_email(profile) or f"{clerk_user_id}@users.noreply.clerk"
     display_name = _derive_display_name(profile, email)
     avatar_url = profile.get("image_url")
+    base = _base_username(profile, email)
 
-    for attempt in range(3):
-        username = await _unique_username(db, _base_username(profile, email))
+    for attempt in range(5):
+        username = _random_username(base)
         try:
             await db.execute(
                 pg_insert(User)
@@ -144,16 +144,27 @@ async def get_or_provision_user(db: AsyncSession, claims: dict) -> User:
                     is_email_verified=True,
                 )
                 # A concurrent request provisioning the same Clerk user is a
-                # no-op; we re-select below either way.
+                # no-op; the re-select below picks up whichever request won.
                 .on_conflict_do_nothing(index_elements=["clerk_user_id"])
             )
             await db.commit()
             break
         except IntegrityError:
-            # Lost a race on the email/username unique constraint — roll back
-            # and retry with a freshly-numbered username.
+            # Either a sibling request beat us to this same clerk_user_id
+            # (only possible via the email/username constraints below, since
+            # the clerk_user_id conflict itself is absorbed by DO NOTHING
+            # above), or our random username/email collided with an unrelated
+            # row. Roll back and re-select by clerk_user_id first: if it now
+            # exists, a concurrent request already provisioned it and we're
+            # done. Otherwise this was a username collision — retry with a
+            # fresh random suffix.
             await db.rollback()
-            if attempt == 2:
+            winner = (
+                await db.execute(select(User).where(User.clerk_user_id == clerk_user_id))
+            ).scalar_one_or_none()
+            if winner is not None:
+                return winner
+            if attempt == 4:
                 raise
 
     user = (
