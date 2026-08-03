@@ -1,5 +1,7 @@
 import logging
 import re
+import unicodedata
+from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -16,12 +18,41 @@ router = APIRouter(prefix="/api/v1/documents", tags=["export"])
 
 
 def _slugify(title: str) -> str:
-    """Convert a document title to a filename-safe slug."""
-    slug = title.lower().strip()
-    slug = re.sub(r"[^\w\s-]", "", slug)
+    """Convert a document title to an ASCII, filename-safe slug.
+
+    Non-ASCII characters (CJK, accented Latin, emoji, ...) are folded to
+    their closest ASCII equivalent where possible (e.g. "café" -> "cafe")
+    and dropped otherwise, so the result is always safe to embed in a
+    latin-1-encoded `Content-Disposition` header.
+    """
+    ascii_title = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode("ascii")
+    slug = ascii_title.lower().strip()
+    slug = re.sub(r"[^a-z0-9\s-]", "", slug)
     slug = re.sub(r"[\s_]+", "-", slug)
     slug = re.sub(r"-+", "-", slug).strip("-")
     return slug or "diagram"
+
+
+def _content_disposition(title: str, ext: str) -> str:
+    """Build a `Content-Disposition: attachment` header value for an export.
+
+    Includes a sanitized ASCII `filename=` (always latin-1 safe, for clients
+    without RFC 5987 support) alongside a `filename*=UTF-8''...` form that
+    carries the original, non-ASCII-preserving title for clients that do.
+
+    The `filename*` value is percent-encoded, so raw control characters and
+    path separators can never reach the header itself. But some clients
+    naively decode `filename*` and reuse it as a filesystem path without
+    further sanitization, so `/`, `\\`, and control characters are stripped
+    from the title first as defense in depth (this value didn't exist before
+    this fix, so it's new attack surface worth closing here rather than
+    relying on every downstream consumer to do it).
+    """
+    ascii_filename = f"{_slugify(title)}.{ext}"
+    safe_title = re.sub(r"[\x00-\x1f\x7f/\\]", "", title.strip())
+    utf8_filename = f"{safe_title or 'diagram'}.{ext}"
+    encoded_utf8_filename = quote(utf8_filename, safe="")
+    return f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_utf8_filename}'
 
 
 async def _render_for_export(source: str, fmt: str) -> bytes:
@@ -72,12 +103,11 @@ async def export_svg(
     doc = await _get_doc_for_export(document_id, user_id, db)
 
     content = await _render_for_export(doc.current_content, "svg")
-    filename = f"{_slugify(doc.title)}.svg"
 
     return Response(
         content=content,
         media_type="image/svg+xml",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": _content_disposition(doc.title, "svg")},
     )
 
 
@@ -91,12 +121,11 @@ async def export_png(
     doc = await _get_doc_for_export(document_id, user_id, db)
 
     content = await _render_for_export(doc.current_content, "png")
-    filename = f"{_slugify(doc.title)}.png"
 
     return Response(
         content=content,
         media_type="image/png",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": _content_disposition(doc.title, "png")},
     )
 
 
@@ -110,12 +139,11 @@ async def export_pdf(
     doc = await _get_doc_for_export(document_id, user_id, db)
 
     content = await _render_for_export(doc.current_content, "pdf")
-    filename = f"{_slugify(doc.title)}.pdf"
 
     return Response(
         content=content,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": _content_disposition(doc.title, "pdf")},
     )
 
 
@@ -128,10 +156,8 @@ async def export_source(
     """Export document as PlantUML source file."""
     doc = await _get_doc_for_export(document_id, user_id, db)
 
-    filename = f"{_slugify(doc.title)}.puml"
-
     return Response(
         content=doc.current_content.encode("utf-8"),
         media_type="text/plain; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": _content_disposition(doc.title, "puml")},
     )
