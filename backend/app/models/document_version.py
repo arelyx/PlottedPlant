@@ -50,5 +50,26 @@ class DocumentVersion(Base):
             "source IN ('auto', 'render', 'manual', 'restore', 'session_end')",
             name="ck_version_source",
         ),
-        # Complex indexes (DESC, covering, BRIN) are created in the migration
+        # Complex indexes (DESC, covering, BRIN) created in migration 0002.
+        # Declared here to match the DB exactly so `alembic revision
+        # --autogenerate` sees them as already present (no spurious DROPs).
+        Index("idx_versions_doc_created", "document_id", text("created_at DESC")),
+        Index(
+            "idx_versions_covering",
+            "document_id",
+            text("created_at DESC"),
+            postgresql_include=[
+                "version_number",
+                "content_hash",
+                "created_by",
+                "label",
+                "source",
+            ],
+        ),
+        Index(
+            "idx_versions_brin_created",
+            "created_at",
+            postgresql_using="brin",
+            postgresql_with={"pages_per_range": "32"},
+        ),
     )
