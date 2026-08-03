@@ -7,7 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.dependencies import get_current_user_id, get_db, parse_document_uuid
-from app.routers.render import classify_render_response
+from app.routers.render import (
+    DEFAULT_PNG_DPI,
+    check_png_not_truncated,
+    check_source_size,
+    clamp_dpi_directives,
+    classify_render_response,
+)
 from app.services.document import get_document_with_permission, resolve_document_internal_id
 
 logger = logging.getLogger(__name__)
@@ -26,6 +32,11 @@ def _slugify(title: str) -> str:
 
 async def _render_for_export(source: str, fmt: str) -> bytes:
     """Render PlantUML source via the internal server."""
+    # Document content bypasses RenderRequest's pydantic char cap entirely
+    # (it comes from the DB, not this request's body), so the byte guard
+    # below is this path's only defense against an oversized body reaching
+    # the 16 KB-limited PlantUML server.
+    check_source_size(source)
     url = f"{settings.plantuml_server_url}/{fmt}/"
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -47,6 +58,8 @@ async def _render_for_export(source: str, fmt: str) -> bytes:
             status_code=422,
             detail={"error": {"code": "PLANTUML_SYNTAX_ERROR", **error}},
         )
+    if fmt == "png":
+        check_png_not_truncated(response.content)
     return response.content
 
 
@@ -90,7 +103,13 @@ async def export_png(
     """Export document as PNG file."""
     doc = await _get_doc_for_export(document_id, user_id, db)
 
-    content = await _render_for_export(doc.current_content, "png")
+    # Unlike /render/png, export doesn't inject a DPI directive of its own —
+    # but a document's stored source can still carry a user-authored
+    # `skinparam dpi <n>` (e.g. typed directly in the editor), which would
+    # otherwise reach the renderer unclamped and risk the same OOM this
+    # issue describes for the direct render path.
+    source = clamp_dpi_directives(doc.current_content, DEFAULT_PNG_DPI)
+    content = await _render_for_export(source, "png")
     filename = f"{_slugify(doc.title)}.png"
 
     return Response(
