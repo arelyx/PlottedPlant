@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
+from sqlalchemy.exc import TimeoutError as SQLATimeoutError
 
 from app.config import settings
 from app.dependencies import async_session_factory, engine, redis_client
@@ -62,6 +63,21 @@ app = FastAPI(
     docs_url="/api/v1/docs" if settings.app_env == "development" else None,
     redoc_url="/api/v1/redoc" if settings.app_env == "development" else None,
 )
+
+# DB pool exhausted — return a structured, retryable 503 instead of letting it
+# fall through to the generic 500 handler below. Starlette dispatches exception
+# handlers by walking the raised exception's MRO and matching the most specific
+# registered class (see starlette._exception_handler._lookup_exception_handler),
+# so this handler always wins over the broad `Exception` handler for
+# TimeoutError regardless of the order the two are registered in here.
+@app.exception_handler(SQLATimeoutError)
+async def db_pool_timeout_handler(request: Request, exc: SQLATimeoutError) -> JSONResponse:
+    logger.warning("DB pool exhausted on %s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse(
+        status_code=503,
+        headers={"Retry-After": "5"},
+        content={"detail": "Server is busy, please retry."},
+    )
 
 # Global exception handler — prevent traceback leaks in production
 @app.exception_handler(Exception)
