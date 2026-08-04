@@ -28,9 +28,17 @@ PermissionLevel = Literal["owner", "editor", "viewer"]
 # embeds the content size in the frame header, but we still pass an explicit
 # `max_output_size` bound on decompress so dictionary frames without an embedded
 # size can never trip an "unknown size" error — 2 MB sits safely above the cap.
-_ZSTD_LEVEL = 19
+# Level 12 is the sweet spot here: on the common autosave path the delta of a
+# small edit is a few hundred bytes regardless of level, and full snapshots
+# (1/K of entries) stay well-compressed — while dropping from 19 keeps per-write
+# compression (which runs under the documents-row lock) fast even on large docs.
+_ZSTD_LEVEL = 12
 _ZSTD_WINDOW_LOG = 27
 _ZSTD_MAX_OUTPUT = 2 * 1024 * 1024  # 2 MB, above the 500 KB plaintext cap
+# A delta whose compressed size is already this small a fraction of the new
+# plaintext is "clearly worth it" — store it without also compressing a full
+# snapshot just to compare sizes (halves compression work on the hot path).
+_DELTA_FAST_FRACTION = 0.25
 
 
 def _delta_params() -> "zstd.ZstdCompressionParameters":
@@ -245,8 +253,12 @@ async def _store_content_entry(
     falls back to a full snapshot; a full that still fails aborts the txn.
     """
     byte_size = len(content_bytes)
-    full_payload = _compress_full(content_bytes)
 
+    # Prefer a forward delta when a base exists and the chain has room. Compute
+    # the delta first; a clearly-small delta is stored without ever compressing a
+    # full snapshot (it would only serve as a size yardstick). `full_payload` is
+    # computed lazily and reused if we fall back to a full.
+    full_payload: bytes | None = None
     delta_payload: bytes | None = None
     delta_depth = 0
     if base_content_id is not None and base_content is not None:
@@ -257,16 +269,18 @@ async def _store_content_entry(
                 )
             )
         ).scalar_one_or_none()
-        if base_depth is not None:
+        # Only attempt a delta while the chain stays under K (bounds reconstruction).
+        if base_depth is not None and base_depth + 1 < settings.version_snapshot_interval:
             delta_depth = base_depth + 1
-            base_bytes = base_content.encode("utf-8")
-            candidate = _compress_delta(content_bytes, base_bytes)
-            # Store a delta only if the chain stays under K and the delta is
-            # meaningfully smaller than a fresh full snapshot.
-            if delta_depth < settings.version_snapshot_interval and len(candidate) < 0.5 * len(
-                full_payload
-            ):
+            candidate = _compress_delta(content_bytes, base_content.encode("utf-8"))
+            if len(candidate) <= _DELTA_FAST_FRACTION * byte_size:
+                # Clearly worth it — skip the full-snapshot compression entirely.
                 delta_payload = candidate
+            else:
+                # Ambiguous: only now pay for a full to compare against.
+                full_payload = _compress_full(content_bytes)
+                if len(candidate) < 0.5 * len(full_payload):
+                    delta_payload = candidate
 
     if delta_payload is not None:
         new_id = await _insert_content_entry(
@@ -286,6 +300,8 @@ async def _store_content_entry(
             delete(DocumentVersionContent).where(DocumentVersionContent.id == new_id)
         )
 
+    if full_payload is None:
+        full_payload = _compress_full(content_bytes)
     new_id = await _insert_content_entry(
         db,
         document_id=document_id,
