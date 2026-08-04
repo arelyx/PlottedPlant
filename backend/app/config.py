@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     # Interval between background maintenance sweeps (orphaned-content GC).
     maintenance_interval_seconds: int = 21600  # 6 hours
 
+    # Delta-chain snapshot interval (K): force a full zstd snapshot when a
+    # forward-delta chain would otherwise reach this depth, bounding
+    # reconstruction cost to at most K decompressions per version.
+    version_snapshot_interval: int = 32
+
     # DB connection pool (per uvicorn worker; there are 4 — see backend/Dockerfile).
     # Keep 4 * (db_pool_size + db_max_overflow) comfortably under Postgres
     # `max_connections` (100, see postgres/postgresql.conf), leaving headroom for

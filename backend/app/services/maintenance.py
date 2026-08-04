@@ -16,39 +16,44 @@ _ADVISORY_LOCK_KEY = 918273645
 
 
 async def gc_orphaned_content(db: AsyncSession) -> int:
-    """Delete document_content rows no longer referenced by any version or by a
-    document's current content. Content is content-addressed and shared, so it
-    can't cascade on delete — without this the table grows forever.
+    """Delete document_version_content rows no longer reachable from any live
+    reference. Entries are shared (dedup) and chained (deltas), so they can't
+    cascade on delete — without this the table grows forever.
+
+    A row is collectable only when NOTHING references it: no live version
+    (``document_versions.content_id``), no other entry chained onto it
+    (``document_version_content.base_id``), and no document HEAD
+    (``documents.current_content_id``). The base_id clause is essential — a full
+    snapshot with no direct version but whose deltas are still live must be
+    kept, or reconstructing those deltas would break.
 
     A plain "DELETE ... WHERE NOT EXISTS (...)" is racy: a concurrent
-    create_version can insert a document_versions row referencing a
-    content_hash in between our NOT EXISTS check and the actual delete,
-    which then fails the FK constraint and aborts the whole transaction.
-
-    To close that window we first select the candidate rows with
-    "FOR UPDATE SKIP LOCKED" in a CTE, then delete exactly those rows in the
-    same statement. Locking a document_content row this way blocks (rather
-    than races) a concurrent INSERT into document_versions that references
-    it, because Postgres's FK trigger takes a FOR KEY SHARE lock on the
-    referenced row — so once we hold FOR UPDATE, no new reference can be
-    added until our transaction ends. Rows already referenced/locked by a
-    concurrent writer are simply skipped this cycle rather than raced; a
-    skipped row that's genuinely orphaned will be collected on the next
-    cycle instead.
+    create_version can insert a reference between our NOT EXISTS check and the
+    delete, which then fails an FK constraint and aborts the whole transaction.
+    We close that window by selecting candidates with "FOR UPDATE SKIP LOCKED"
+    in a CTE, then deleting exactly those rows. Locking a
+    document_version_content row this way blocks (rather than races) a
+    concurrent INSERT that references it, because Postgres's FK trigger takes a
+    FOR KEY SHARE lock on the referenced row — so once we hold FOR UPDATE, no
+    new reference can be added until our transaction ends. Rows already
+    referenced/locked by a concurrent writer are simply skipped this cycle and
+    collected on a later one.
     """
     result = await db.execute(
         text(
             "WITH candidates AS ("
-            "  SELECT dc.content_hash FROM document_content dc "
+            "  SELECT dvc.id FROM document_version_content dvc "
             "  WHERE NOT EXISTS ("
-            "    SELECT 1 FROM document_versions v WHERE v.content_hash = dc.content_hash"
+            "    SELECT 1 FROM document_versions v WHERE v.content_id = dvc.id"
             "  ) AND NOT EXISTS ("
-            "    SELECT 1 FROM documents d WHERE d.current_content_hash = dc.content_hash"
+            "    SELECT 1 FROM document_version_content c WHERE c.base_id = dvc.id"
+            "  ) AND NOT EXISTS ("
+            "    SELECT 1 FROM documents d WHERE d.current_content_id = dvc.id"
             "  )"
             "  FOR UPDATE SKIP LOCKED"
             ") "
-            "DELETE FROM document_content "
-            "WHERE content_hash IN (SELECT content_hash FROM candidates)"
+            "DELETE FROM document_version_content "
+            "WHERE id IN (SELECT id FROM candidates)"
         )
     )
     return result.rowcount or 0

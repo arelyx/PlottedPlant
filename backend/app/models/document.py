@@ -38,6 +38,13 @@ class Document(Base):
     current_content_hash: Mapped[bytes] = mapped_column(
         LargeBinary, nullable=False
     )
+    # Points at the HEAD's content entry in the delta-chain store. Nullable so a
+    # freshly-inserted document can flush before create_version populates it in
+    # the same transaction. `current_content` (above) remains the full HEAD text
+    # for O(1) editor loads — this column is only for chaining new deltas.
+    current_content_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("document_version_content.id"), nullable=True
+    )
     last_edited_by: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

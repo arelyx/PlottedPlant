@@ -10,7 +10,7 @@ from app.models.user import User  # noqa: E402, F401
 from app.models.user_preferences import UserPreferences  # noqa: E402, F401
 from app.models.folder import Folder  # noqa: E402, F401
 from app.models.document import Document  # noqa: E402, F401
-from app.models.document_content import DocumentContent  # noqa: E402, F401
+from app.models.document_version_content import DocumentVersionContent  # noqa: E402, F401
 from app.models.document_version import DocumentVersion  # noqa: E402, F401
 from app.models.template import Template  # noqa: E402, F401
 from app.models.document_share import DocumentShare  # noqa: E402, F401

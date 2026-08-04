@@ -7,7 +7,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    LargeBinary,
     Text,
     UniqueConstraint,
     func,
@@ -28,8 +27,8 @@ class DocumentVersion(Base):
         BigInteger, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
     )
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    content_hash: Mapped[bytes] = mapped_column(
-        LargeBinary, ForeignKey("document_content.content_hash"), nullable=False
+    content_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("document_version_content.id"), nullable=False
     )
     created_by: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -50,22 +49,12 @@ class DocumentVersion(Base):
             "source IN ('auto', 'render', 'manual', 'restore', 'session_end')",
             name="ck_version_source",
         ),
-        # Complex indexes (DESC, covering, BRIN) created in migration 0002.
-        # Declared here to match the DB exactly so `alembic revision
-        # --autogenerate` sees them as already present (no spurious DROPs).
-        Index("idx_versions_doc_created", "document_id", text("created_at DESC")),
-        Index(
-            "idx_versions_covering",
-            "document_id",
-            text("created_at DESC"),
-            postgresql_include=[
-                "version_number",
-                "content_hash",
-                "created_by",
-                "label",
-                "source",
-            ],
-        ),
+        # Complex indexes (DESC, BRIN) created in migration 0012. Declared here
+        # to match the DB exactly so `alembic revision --autogenerate` sees them
+        # as already present (no spurious DROPs). Pagination is on
+        # version_number (strictly monotonic per doc), so that is the ordered
+        # key — not created_at. The old covering index was dropped in 0012.
+        Index("idx_versions_doc_created", "document_id", text("version_number DESC")),
         Index(
             "idx_versions_brin_created",
             "created_at",
