@@ -4,7 +4,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user_id, get_db, parse_document_uuid
-from app.models.document_content import DocumentContent
 from app.models.document_version import DocumentVersion
 from app.models.user import User
 from app.services.collaboration import notify_force_content
@@ -19,8 +18,10 @@ from app.schemas.version import (
     VersionListResponse,
 )
 from app.services.document import (
+    compute_content_hash,
     create_version,
     get_document_with_permission,
+    reconstruct_content,
     resolve_document_internal_id,
 )
 
@@ -147,13 +148,8 @@ async def get_version(
     if version is None:
         raise HTTPException(status_code=404, detail="Version not found")
 
-    # Fetch content from document_content table
-    content_result = await db.execute(
-        select(DocumentContent.content).where(
-            DocumentContent.content_hash == version.content_hash
-        )
-    )
-    content = content_result.scalar_one()
+    # Reconstruct content from the delta chain (self-verifies the hash).
+    content = await reconstruct_content(db, version.content_id)
 
     created_by = await _get_user_brief(db, version.created_by)
 
@@ -202,20 +198,15 @@ async def get_version_diff(
     if version_number not in versions or compare_to not in versions:
         raise HTTPException(status_code=404, detail="One or both versions not found")
 
-    # Fetch contents
-    hashes = [versions[version_number].content_hash, versions[compare_to].content_hash]
-    content_result = await db.execute(
-        select(DocumentContent.content_hash, DocumentContent.content).where(
-            DocumentContent.content_hash.in_(hashes)
-        )
-    )
-    content_map = {row.content_hash: row.content for row in content_result.all()}
+    # Reconstruct both versions from their delta chains (each self-verifies).
+    base_content = await reconstruct_content(db, versions[version_number].content_id)
+    compare_content = await reconstruct_content(db, versions[compare_to].content_id)
 
     return VersionDiffResponse(
         base_version=version_number,
         compare_version=compare_to,
-        base_content=content_map[versions[version_number].content_hash],
-        compare_content=content_map[versions[compare_to].content_hash],
+        base_content=base_content,
+        compare_content=compare_content,
     )
 
 
@@ -299,12 +290,9 @@ async def restore_version(
     if target_version is None:
         raise HTTPException(status_code=404, detail="Version not found")
 
-    target_content_result = await db.execute(
-        select(DocumentContent.content).where(
-            DocumentContent.content_hash == target_version.content_hash
-        )
-    )
-    target_content = target_content_result.scalar_one()
+    # Reconstruct the target version's content from its delta chain.
+    target_content = await reconstruct_content(db, target_version.content_id)
+    target_content_hash, _ = compute_content_hash(target_content)
 
     # `doc.current_content_hash` is the *persisted* (DB) hash. While editors are
     # connected the authoritative content is the in-memory Y.Doc, which can hold
@@ -317,7 +305,7 @@ async def restore_version(
     # numbers on identical persisted content; we still fire notify_force_content
     # below on BOTH paths so any live Y.Doc is driven back to the target and the
     # force-content revision bump fences off pre-restore debounced stores.
-    already_persisted = target_version.content_hash == doc.current_content_hash
+    already_persisted = target_content_hash == doc.current_content_hash
 
     if already_persisted:
         # DB already holds the target content — don't create duplicate versions,
