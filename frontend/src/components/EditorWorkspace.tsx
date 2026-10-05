@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type * as Monaco from "monaco-editor";
 import { Panel, Group, Separator } from "react-resizable-panels";
+import { useIsMobile } from "@/hooks/useMediaQuery";
 
 export type ViewMode = "editor" | "split" | "preview";
 
@@ -23,18 +24,28 @@ interface EditorWorkspaceProps {
   preview: ReactNode;
 }
 
-/** The code editor and diagram preview, side by side with a draggable divider. */
+/**
+ * The code editor and diagram preview with a draggable divider: side by side
+ * on wide screens, stacked (code above, diagram below) on phones.
+ */
 export function EditorWorkspace({ viewMode, editor, preview }: EditorWorkspaceProps) {
+  const stacked = useIsMobile();
   return (
-    <Group orientation="horizontal">
+    <Group orientation={stacked ? "vertical" : "horizontal"}>
       {viewMode !== "preview" && (
         <>
           <Panel defaultSize={50} minSize={20}>
             {editor}
           </Panel>
-          {viewMode === "split" && (
-            <Separator className="w-1.5 bg-border hover:bg-primary/20 transition-colors" />
-          )}
+          {viewMode === "split" &&
+            (stacked ? (
+              // A taller handle with a grip: a 6px line is hard to grab with a finger.
+              <Separator className="flex h-4 items-center justify-center border-y bg-muted touch-none">
+                <span className="h-1 w-10 rounded-full bg-muted-foreground/40" />
+              </Separator>
+            ) : (
+              <Separator className="w-1.5 bg-border hover:bg-primary/20 transition-colors" />
+            ))}
         </>
       )}
       {viewMode !== "editor" && (
