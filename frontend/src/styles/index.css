@@ -3,6 +3,8 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
+/* Phones in landscape: too short for app chrome around the editor. */
+@custom-variant short (@media (max-height: 500px));
 
 @theme inline {
     --radius-sm: calc(var(--radius) - 4px);

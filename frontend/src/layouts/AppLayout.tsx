@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Link, Outlet, useNavigate } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   SignedIn,
   SignedOut,
@@ -20,6 +20,9 @@ import {
 export function AppLayout() {
   const { isSignedIn } = useUser();
   const navigate = useNavigate();
+  // On short screens (phones in landscape) the editor needs every pixel; its
+  // own toolbar has a way back, so the app header steps aside there.
+  const isEditor = useLocation().pathname.startsWith("/documents/");
   const { preferences, isLoaded, resolvedTheme, load, update } =
     usePreferencesStore();
 
@@ -55,7 +58,7 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b">
+      <header className={`border-b ${isEditor ? "short:hidden" : ""}`}>
         <div className="flex h-14 items-center justify-between gap-2 px-3 sm:px-4">
           <div className="flex items-center gap-4 min-w-0">
             <Link to={isSignedIn ? "/dashboard" : "/"} className="text-lg font-semibold">

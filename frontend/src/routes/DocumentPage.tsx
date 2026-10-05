@@ -468,7 +468,7 @@ export function DocumentPage() {
         : "bg-red-500";
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-3.5rem)]">
+    <div className="flex flex-col h-[calc(100dvh-3.5rem)] short:h-dvh">
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 px-2 sm:px-3 py-1.5 border-b bg-background shrink-0">
         <div className="flex items-center gap-1 sm:gap-2 min-w-0">
@@ -687,7 +687,7 @@ export function DocumentPage() {
       />
 
       {/* Status bar */}
-      <div className="flex items-center gap-4 px-3 py-1 border-t text-xs text-muted-foreground bg-background shrink-0">
+      <div className="flex short:hidden items-center gap-4 px-3 py-1 border-t text-xs text-muted-foreground bg-background shrink-0">
         <span className="hidden sm:inline">
           Ln {cursorPosition.line}, Col {cursorPosition.column}
         </span>

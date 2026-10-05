@@ -448,7 +448,7 @@ export function LandingPage() {
       </div>
 
       {/* Status bar */}
-      <div className="flex items-center gap-4 px-3 py-1 border-t text-xs text-muted-foreground bg-background shrink-0">
+      <div className="flex short:hidden items-center gap-4 px-3 py-1 border-t text-xs text-muted-foreground bg-background shrink-0">
         <span className="hidden sm:inline">
           Ln {cursorPosition.line}, Col {cursorPosition.column}
         </span>
