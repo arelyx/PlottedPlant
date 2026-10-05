@@ -193,38 +193,40 @@ export function DashboardPage() {
   const activeFolder = folders.find((f) => f.id === activeFolderId);
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+        <div className="min-w-0">
           {activeFolderId ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <button
                 onClick={() => setActiveFolderId(null)}
-                className="text-sm text-muted-foreground hover:text-foreground"
+                className="text-sm text-muted-foreground hover:text-foreground whitespace-nowrap"
               >
                 My Projects
               </button>
               <span className="text-muted-foreground">/</span>
-              <h1 className="text-2xl font-bold">{activeFolder?.name}</h1>
+              <h1 className="text-2xl font-bold truncate">{activeFolder?.name}</h1>
             </div>
           ) : (
             <h1 className="text-2xl font-bold">My Projects</h1>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Input
             placeholder="Search documents..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-64"
+            className="w-full sm:w-64"
           />
           {!activeFolderId && (
-            <Button variant="outline" onClick={() => setShowNewFolder(true)}>
+            <Button variant="outline" className="flex-1 sm:flex-none" onClick={() => setShowNewFolder(true)}>
               New Folder
             </Button>
           )}
-          <Button onClick={() => setShowTemplatePicker(true)}>New Document</Button>
+          <Button className="flex-1 sm:flex-none" onClick={() => setShowTemplatePicker(true)}>
+            New Document
+          </Button>
         </div>
       </div>
 
@@ -516,7 +518,10 @@ function FolderCard({
       </div>
       <DropdownMenu>
         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-          <button className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-accent">
+          <button
+                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100 p-1 pointer-coarse:p-2.5 -my-1 pointer-coarse:-my-2 rounded hover:bg-accent"
+                aria-label="Actions"
+              >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
             </svg>
@@ -601,7 +606,10 @@ function DocumentList({
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <button className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-accent">
+              <button
+                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100 p-1 pointer-coarse:p-2.5 -my-1 pointer-coarse:-my-2 rounded hover:bg-accent"
+                aria-label="Actions"
+              >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
                 </svg>
