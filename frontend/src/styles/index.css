@@ -6,6 +6,18 @@
 /* Phones in landscape: too short for app chrome around the editor. */
 @custom-variant short (@media (max-height: 500px));
 
+/* iOS Safari zooms the page into any focused field whose text is under 16px
+   and doesn't zoom back out when the keyboard closes. Keep every text field
+   at 16px on touch screens, including the hidden textarea Monaco types
+   into (it is invisible, so this changes nothing on screen). Pinch-zoom still works. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 @theme inline {
     --radius-sm: calc(var(--radius) - 4px);
     --radius-md: calc(var(--radius) - 2px);
