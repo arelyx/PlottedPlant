@@ -1,0 +1,198 @@
+import type { SnippetDef } from "./snippets-model";
+
+// PlantUML 1.2026.1 fails on a tree, tab bar or menu that is the outermost
+// Salt element, so those fragments are validated as a row of an enclosing
+// "{ }" block (the label below makes the validator add one).
+const NESTED = "<b>Section";
+
+export const saltSnippets: SnippetDef[] = [
+  {
+    prefix: "salt",
+    description: "Salt wireframe (starter)",
+    body: [
+      "@startsalt",
+      "{+",
+      "\t<b>${1:Sign in}",
+      "\t==",
+      "\t{",
+      '\t\t${2:Email}    | "${3:user@example.com}"',
+      '\t\t${4:Password} | "${5:********        }"',
+      "\t}",
+      "\t[X] ${6:Remember me}",
+      "\t{ [${7:Cancel}] | [${8: Sign in }] }",
+      "}",
+      "@endsalt",
+    ].join("\n"),
+    scope: "top",
+    expect: "SALT",
+  },
+  {
+    prefix: "window",
+    description: "Framed window with a title bar",
+    body: "{+\n\t<b>${1:Window title}\n\t==\n\t${2:Content}\n}",
+    scope: ["salt"],
+  },
+  {
+    prefix: "form",
+    description: "Form with labelled inputs and buttons",
+    body: [
+      "{",
+      '\t${1:Name}  | "${2:Alice            }"',
+      '\t${3:Email} | "${4:alice@example.com}"',
+      "\t${5:Role}  | ^${6:Admin}^",
+      "\t[${7:Cancel}] | [${8:Save}]",
+      "}",
+    ].join("\n"),
+    scope: ["salt"],
+  },
+  {
+    prefix: "login",
+    description: "Login form with user name, password and buttons",
+    body: [
+      "{",
+      '\t${1:Login}    | "${2:MyName   }"',
+      '\t${3:Password} | "${4:****     }"',
+      "\t[${5:Cancel}] | [${6:  OK  }]",
+      "}",
+    ].join("\n"),
+    scope: ["salt"],
+  },
+  {
+    prefix: "field",
+    description: "Label and text field on one row",
+    body: '${1:Label} | "${2:value       }"',
+    scope: ["salt"],
+  },
+  {
+    prefix: "input",
+    description: "Text field (the quoted width sets its size)",
+    body: '"${1:Text field   }"',
+    scope: ["salt"],
+  },
+  {
+    prefix: "textarea",
+    description: "Bordered multi-line text area",
+    body: '{+\n\t${1:First line}\n\t${2:Second line}\n\t.\n\t"${3:                    }"\n}',
+    scope: ["salt"],
+  },
+  {
+    prefix: "button",
+    description: "Button",
+    body: "[${1:OK}]",
+    scope: ["salt"],
+  },
+  {
+    prefix: "buttons",
+    description: "Row of buttons",
+    body: "{ [${1:Cancel}] | [${2:OK}] }",
+    scope: ["salt"],
+  },
+  {
+    prefix: "checkbox",
+    description: "Checked checkbox",
+    body: "[X] ${1:Checked option}",
+    scope: ["salt"],
+  },
+  {
+    prefix: "checkbox-off",
+    description: "Unchecked checkbox",
+    body: "[] ${1:Unchecked option}",
+    scope: ["salt"],
+  },
+  {
+    prefix: "radio",
+    description: "Selected radio button",
+    body: "(X) ${1:Selected option}",
+    scope: ["salt"],
+  },
+  {
+    prefix: "radio-off",
+    description: "Unselected radio button",
+    body: "() ${1:Other option}",
+    scope: ["salt"],
+  },
+  {
+    prefix: "radio-group",
+    description: "Group of radio buttons with one selected",
+    body: "(X) ${1:First}\n() ${2:Second}\n() ${3:Third}",
+    scope: ["salt"],
+  },
+  {
+    prefix: "dropdown",
+    description: "Closed drop-down list",
+    body: "^${1:Choice}^",
+    scope: ["salt"],
+  },
+  {
+    prefix: "dropdown-open",
+    description: "Drop-down list shown open with its items",
+    body: "^${1:Choice}^^ ${2:Item 1}^^ ${3:Item 2}^",
+    scope: ["salt"],
+  },
+  {
+    prefix: "table",
+    description: "Table with all grid lines",
+    body: "{#\n\t${1:Name} | ${2:Role} | ${3:Status}\n\t${4:Alice} | ${5:Admin} | ${6:Active}\n\t${7:Bob} | ${8:User} | ${9:Invited}\n}",
+    scope: ["salt"],
+  },
+  {
+    prefix: "grid",
+    description: "Grid with a chosen line style (# all, ! vertical, - horizontal, + outer)",
+    body: "{${1|#,!,-,+|}\n\t${2:A1} | ${3:B1}\n\t${4:A2} | ${5:B2}\n}",
+    scope: ["salt"],
+  },
+  {
+    prefix: "tree",
+    description: "Tree view",
+    body: "{T\n\t+ ${1:Project}\n\t++ ${2:src}\n\t+++ ${3:main.ts}\n\t++ ${4:README.md}\n}",
+    scope: ["salt"],
+    setup: NESTED,
+  },
+  {
+    prefix: "tree-table",
+    description: "Tree view with extra columns",
+    body: "{T#\n\t+ ${1:Name} | ${2:Size}\n\t+ ${3:src} | ${4:12 kB}\n\t++ ${5:main.ts} | ${6:8 kB}\n}",
+    scope: ["salt"],
+    setup: NESTED,
+  },
+  {
+    prefix: "tabs",
+    description: "Tab bar with the first tab active",
+    body: "{/ <b>${1:General} | ${2:Advanced} | ${3:About} }",
+    scope: ["salt"],
+    setup: NESTED,
+  },
+  {
+    prefix: "menu",
+    description: "Menu bar",
+    body: "{* ${1:File} | ${2:Edit} | ${3:View} | ${4:Help} }",
+    scope: ["salt"],
+    setup: NESTED,
+  },
+  {
+    prefix: "menu-open",
+    description: "Menu bar with one menu opened",
+    body: "{* ${1:File} | ${2:Edit} | ${3:View}\n\t$1 | ${4:New} | ${5:Open} | - | ${6:Close}\n}",
+    scope: ["salt"],
+    setup: NESTED,
+  },
+  {
+    prefix: "group",
+    description: "Titled group box",
+    body: '{^"${1:Group title}"\n\t${2:Content}\n}',
+    scope: ["salt"],
+  },
+  {
+    prefix: "scroll",
+    description: "Scrollable area (S both bars, SI vertical, S- horizontal)",
+    body: "{${1|S,SI,S-|}\n\t${2:Line 1}\n\t${3:Line 2}\n\t${4:Line 3}\n}",
+    scope: ["salt"],
+  },
+  {
+    prefix: "separator",
+    description: "Horizontal separator line (-- plain, == double, ~~ thick, .. dotted)",
+    body: "${1|--,==,~~,..|}",
+    scope: ["salt"],
+    setup: "Above",
+  },
+];

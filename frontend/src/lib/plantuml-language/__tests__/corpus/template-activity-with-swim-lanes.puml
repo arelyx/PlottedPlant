@@ -1,0 +1,25 @@
+@startuml
+|Customer|
+start
+:Browse products;
+:Add to cart;
+:Checkout;
+
+|Payment Service|
+:Process payment;
+
+if (Payment OK?) then (yes)
+    |Warehouse|
+    :Pick items;
+    :Pack order;
+    :Ship order;
+
+    |Customer|
+    :Receive order;
+    stop
+else (no)
+    |Customer|
+    :Show payment error;
+    stop
+endif
+@enduml

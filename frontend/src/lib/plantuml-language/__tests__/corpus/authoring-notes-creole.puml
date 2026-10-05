@@ -1,0 +1,61 @@
+@startuml
+participant Alice
+participant Bob
+
+Alice -> Bob: hello
+note left
+  A note with a list:
+  * first
+  ** nested
+  *** deeper
+  * second
+  # numbered
+  ## nested number
+end note
+
+note over Alice, Bob #FFAAAA
+  |= Key |= Value |
+  | a    | 1      |
+  | b    | 2      |
+end note
+
+hnote over Alice
+  <b>bold</b> and
+    indented text
+end hnote
+
+rnote right of Bob
+  Tree:
+  |_ one
+    |_ two
+  |_ three
+endrnote
+
+/ note right of Bob: one line
+
+legend right
+  Legend with code:
+  <code>
+    if (x) {
+      y();
+    }
+  </code>
+endlegend
+
+title
+  Multi-line
+  <i>title</i>
+end title
+
+header
+  Page header
+end header
+
+footer
+  Page footer
+end footer
+
+caption
+  Figure 1
+end caption
+@enduml

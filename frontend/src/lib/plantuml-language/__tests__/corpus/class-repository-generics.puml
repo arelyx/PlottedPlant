@@ -1,0 +1,79 @@
+@startuml
+' Nested generics, member modifiers, separators and every relation type
+hide empty members
+set namespaceSeparator ::
+
+package "Domain" <<Rectangle>> #F8F8F8 {
+  abstract class Entity<ID extends Comparable<ID>> {
+    {abstract} +id(): ID
+    #createdAt: Instant
+    -version: int = 0
+    ~touch(): void
+    {static} +MAX_VERSION: int
+  }
+
+  class Order <<Aggregate>> #LightBlue {
+    .. state ..
+    +lines: List<OrderLine>
+    +totals: Map<Currency, List<Money>>
+    -- behaviour --
+    +add(line: OrderLine): Order
+    +total(currency: Currency): Money
+    == events ==
+    +pending(): List<DomainEvent<Order>>
+    __ internal __
+    -recalculate()
+  }
+
+  class OrderLine {
+    +sku: String
+    +quantity: int
+  }
+
+  enum Status {
+    DRAFT
+    PAID
+    SHIPPED
+  }
+
+  interface Repository<T extends Entity<ID>, ID> {
+    +find(id: ID): Optional<T>
+    +save(entity: T): T
+  }
+
+  annotation Audited
+  class "Order Repository" as OrderRepo << (R,#FF7700) Repository >>
+  exception OrderNotFound
+  struct Money {
+    amount: decimal
+    currency: Currency
+  }
+}
+
+Entity <|-- Order
+Repository <|.. OrderRepo : implements
+Order "1" *-- "1..*" OrderLine : contains >
+Order o-- Status
+Order ..> Money : uses
+OrderRepo --> Order : loads
+OrderRepo -[#red,dashed]-> OrderNotFound : throws
+Order -up-> Audited
+Order::lines --> OrderLine::sku : by sku
+Order +-- OrderLine
+Order #-- Money
+Order x-- Status
+Order }-- Money
+Order ^-- Entity
+(Order, OrderLine) .. Status
+Order -- OrderRepo
+Order <--> Status
+
+note right of Order::total
+  Sums //all// lines, e.g. ""total(EUR)"".
+  Not an arrow: a --> b
+end note
+note "Shared by every aggregate" as N1
+Entity .. N1
+note on link #pink: also noted
+Order : +cancel(reason: String)
+@enduml

@@ -1,0 +1,20 @@
+@startmindmap
+* Project Planning
+** Requirements
+*** User Stories
+*** Acceptance Criteria
+*** Priority Matrix
+** Design
+*** Architecture
+*** Database Schema
+*** API Specification
+*** UI Mockups
+** Development
+*** Backend
+*** Frontend
+*** Testing
+** Deployment
+*** Staging
+*** Production
+*** Monitoring
+@endmindmap

@@ -1,0 +1,24 @@
+@startuml
+' Things that look like arrows or colours but are not
+participant "2026-01-01" as D1
+participant Jan
+participant Dec
+Jan -> Dec : 2026-01-01 -> 2026-12-31
+Jan --> Dec : range 01/01--31/12
+Jan ->> Dec : temperature -5 .. -10
+Jan -> Dec : a->b, c-->d, e..>f (text)
+Jan -> Dec : issue #42 in <color:#FF0000>#red</color>
+Dec --> Jan : it's 5 o'clock -- really
+Jan -> D1 : see == note ==
+== Q1 2026-01-01 -- 2026-03-31 ==
+... wait until 2026-04-01 ...
+Jan -[#0000FF]-> Dec : blue
+Jan -[#red,dashed]->o Dec : styled
+Jan o<->o Dec
+Jan x<- Dec
+Jan <<- Dec
+Jan -\ Dec
+Jan //-- Dec
+Dec \\- Jan
+note over Jan : 2026-01-01 --> not an arrow
+@enduml

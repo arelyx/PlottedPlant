@@ -1,0 +1,3 @@
+@startjson
+{ "name": "x", "list": [1, 2] }
+@endjson

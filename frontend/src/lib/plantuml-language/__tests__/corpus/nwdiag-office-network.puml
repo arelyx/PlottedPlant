@@ -1,0 +1,26 @@
+@startuml
+nwdiag {
+  internet [shape = cloud];
+  internet -- router;
+
+  network dmz {
+    address = "210.x.x.x/24"
+    color = "#FFAAAA"
+    router [address = ".1"];
+    web01 [address = "210.x.x.10", description = "web01"];
+    web02 [address = "210.x.x.11"];
+  }
+  network internal {
+    address = "172.16.0.0/24";
+    web01 [address = "172.16.0.1"];
+    web02 [address = "172.16.0.2"];
+    db01 [address = "172.16.0.100", shape = database];
+  }
+  group {
+    color = "#CCFFCC";
+    description = "web tier";
+    web01;
+    web02;
+  }
+}
+@enduml

@@ -1,0 +1,34 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor Customer
+actor "Support Agent" as Agent <<Staff>>
+:Payment Provider: as PSP
+actor/ Auditor
+
+rectangle "Online Shop" {
+  usecase "Browse catalogue" as UC1
+  usecase UC2 as "Place order
+  --
+  includes payment"
+  (Track order) as UC3
+  (Request refund)
+  usecase/ "Review audit log" as UC5
+}
+
+Customer --> UC1
+Customer --> UC2
+Customer --> UC3
+Customer --> (Request refund)
+UC2 ..> PSP : <<include>>
+(Request refund) .> UC3 : <<extend>>
+Agent --> (Request refund) : approves
+Agent -up-|> Customer
+Auditor --> UC5
+:Payment Provider: --> UC3
+
+note right of UC2 : Guests can order too
+note "Refunds within **30 days**" as N
+(Request refund) .. N
+@enduml

@@ -1,0 +1,5 @@
+@startuml
+concise "User" as U
+@0
+U is Idle
+@enduml

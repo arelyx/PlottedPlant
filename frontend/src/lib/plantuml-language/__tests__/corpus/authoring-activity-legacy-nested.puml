@@ -1,0 +1,26 @@
+@startuml
+(*) --> "Check input"
+note right
+  Legacy syntax
+  with a note
+end note
+if "valid?" then
+  -->[yes] "Process"
+  if "large?" then
+    --> "Split
+    into parts"
+    --> "Merge"
+  else
+    --> "Handle directly"
+  endif
+  --> "Store"
+else
+  -->[no] "Reject"
+endif
+partition Archive {
+  "Store" --> "Compress"
+  "Merge" --> "Compress"
+}
+"Compress" --> (*)
+"Reject" --> (*)
+@enduml

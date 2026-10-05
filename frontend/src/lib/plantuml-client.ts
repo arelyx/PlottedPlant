@@ -14,6 +14,7 @@
 //   error so the UI can keep the last good diagram visible.
 
 import { api } from "./api";
+import { describeEngineError } from "./plantuml-language/core/engine-error";
 
 export interface RenderErrorInfo {
   message: string;
@@ -28,6 +29,8 @@ export interface PreviewRenderResult {
   error?: RenderErrorInfo;
   /** True when a newer render replaced this one before it ran — discard. */
   superseded?: boolean;
+  /** Internal: the in-browser engine cannot draw this diagram type; ask the server. */
+  needsServer?: boolean;
   engine: "client" | "server";
 }
 
@@ -126,7 +129,21 @@ function detectErrorIn(doc: Document): RenderErrorInfo | null {
   );
   if (!red) return null;
 
-  return { message: (red.textContent ?? "").trim() || "Syntax error", line };
+  return { message: describeEngineError((red.textContent ?? "").trim() || "Syntax error"), line };
+}
+
+/**
+ * Normalize the error payload of a 422 from /render/svg. The API passes
+ * through PlantUML's X-PlantUML-Diagram-Error-Line header, which counts
+ * lines from 0; RenderErrorInfo.line is 1-based like the in-browser engine's.
+ */
+function fromServerError(payload: unknown): RenderErrorInfo {
+  const error = (payload ?? {}) as { message?: unknown; line?: unknown };
+  const info: RenderErrorInfo = {
+    message: describeEngineError(typeof error.message === "string" && error.message ? error.message : "Syntax error"),
+  };
+  if (typeof error.line === "number" && Number.isInteger(error.line) && error.line >= 0) info.line = error.line + 1;
+  return info;
 }
 
 /**
@@ -138,10 +155,14 @@ function detectErrorIn(doc: Document): RenderErrorInfo | null {
  * pages. The has-background guard future-proofs against the engine gaining
  * background support later.
  */
-function processEngineSvg(svg: string): { svg?: string; error?: RenderErrorInfo } {
+function processEngineSvg(svg: string): { svg?: string; error?: RenderErrorInfo; unsupported?: boolean } {
   const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
   const root = doc.documentElement;
   if (root.tagName !== "svg") return { svg }; // parse failure — pass through
+
+  // The TeaVM build lacks some diagram types the server renders (Salt, Chen,
+  // ditaa, DOT, math, LaTeX) and answers with an explanatory image, not an error.
+  if (/Diagram not supported by this release/.test(root.textContent ?? "")) return { unsupported: true };
 
   const error = detectErrorIn(doc);
   if (error) return { error };
@@ -175,7 +196,10 @@ function runEngineRender(source: string): Promise<PreviewRenderResult> {
         // On an error image, processEngineSvg returns only the error (no
         // svg), so callers keep the last good diagram — matching the server
         // 422 behavior.
-        (svg) => finish({ ...processEngineSvg(svg), engine: "client" }),
+        (svg) => {
+          const { unsupported, ...result } = processEngineSvg(svg);
+          finish({ ...result, engine: "client", needsServer: unsupported });
+        },
         (err) => finish({ error: { message: String(err) || "Render failed" }, engine: "client" }),
       );
     } catch (err) {
@@ -183,6 +207,11 @@ function runEngineRender(source: string): Promise<PreviewRenderResult> {
     }
   });
 }
+
+// Sub-diagrams inside @startuml that the TeaVM build rejects as syntax errors
+// although the server renders them. An error on such a document is re-checked
+// on the server instead of being trusted.
+const CLIENT_ENGINE_GAPS = /^[ \t]*(?:nwdiag[ \t]*\{|salt[ \t]*(?:\{|$))/m;
 
 // Serialized render queue with latest-wins coalescing: at most one render
 // runs and at most one waits; a newer request replaces the waiting one, whose
@@ -194,9 +223,12 @@ async function pumpQueue(): Promise<void> {
   while (queued) {
     const job = queued;
     queued = null;
-    const result = engineFailed
+    let result = engineFailed
       ? await renderOnServer(job.source)
       : await runEngineRender(job.source);
+    if (result.needsServer || (result.error && !result.error.transient && CLIENT_ENGINE_GAPS.test(job.source))) {
+      result = await renderOnServer(job.source);
+    }
     job.resolve(result);
   }
   renderRunning = false;
@@ -222,10 +254,7 @@ async function renderOnServer(source: string): Promise<PreviewRenderResult> {
 
     if (response.status === 422) {
       const data = await response.json();
-      return {
-        error: data.detail?.error || data.error || { message: "Syntax error" },
-        engine: "server",
-      };
+      return { error: fromServerError(data.detail?.error ?? data.error), engine: "server" };
     }
 
     if (!response.ok) throw new Error("Render failed");

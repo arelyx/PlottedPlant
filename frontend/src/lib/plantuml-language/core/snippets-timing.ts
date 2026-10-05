@@ -1,0 +1,142 @@
+import type { SnippetDef } from "./snippets-model";
+
+// Timing fragments need declared participants, and most need a first time
+// point, before they parse.
+const PLAYERS = 'robust "Web browser" as WB\nconcise "Web user" as WU';
+const TIMELINE = `${PLAYERS}\n@0\nWU is Idle\nWB is Idle\n@100\nWB is Processing`;
+
+export const timingSnippets: SnippetDef[] = [
+  {
+    prefix: "timing",
+    description: "Timing diagram (starter)",
+    body: [
+      "@startuml",
+      'robust "${1:Web browser}" as ${2:WB}',
+      'concise "${3:Web user}" as ${4:WU}',
+      "",
+      "@0",
+      "$4 is Idle",
+      "$2 is Idle",
+      "",
+      "@100",
+      "$4 -> $2 : ${5:URL}",
+      "$4 is Waiting",
+      "$2 is Processing",
+      "",
+      "@300",
+      "$2 is Idle",
+      "$4 is Idle",
+      "$0",
+      "@enduml",
+    ].join("\n"),
+    scope: "top",
+    expect: "TIMING",
+  },
+  {
+    prefix: "robust",
+    description: "Robust participant: states drawn as separate levels",
+    body: 'robust "${1:Web browser}" as ${2:WB}',
+    scope: ["timing"],
+  },
+  {
+    prefix: "concise",
+    description: "Concise participant: states drawn on a single band",
+    body: 'concise "${1:Web user}" as ${2:WU}',
+    scope: ["timing"],
+  },
+  {
+    prefix: "clock",
+    description: "Clock signal with a period",
+    body: 'clock "${1:Clock}" as ${2:clk} with period ${3:50}',
+    scope: ["timing"],
+  },
+  {
+    prefix: "binary",
+    description: "Binary signal (high or low)",
+    body: 'binary "${1:Enable}" as ${2:EN}',
+    scope: ["timing"],
+  },
+  {
+    prefix: "analog",
+    description: "Analog signal with a value range",
+    body: 'analog "${1:Voltage}" between ${2:0} and ${3:5} as ${4:V}',
+    scope: ["timing"],
+  },
+  {
+    prefix: "states",
+    description: "Declare the states of a participant, in display order",
+    body: "${1:WB} has ${2:Idle},${3:Processing}",
+    scope: ["timing"],
+    setup: PLAYERS,
+  },
+  {
+    prefix: "time",
+    description: "State changes at an absolute time",
+    body: "@${1:200}\n${2:WB} is ${3:Idle}",
+    scope: ["timing"],
+    setup: TIMELINE,
+  },
+  {
+    prefix: "time-relative",
+    description: "State changes some time after the previous time point",
+    body: "@+${1:50}\n${2:WB} is ${3:Idle}",
+    scope: ["timing"],
+    setup: TIMELINE,
+  },
+  {
+    prefix: "time-named",
+    description: "Time point with a name that later lines can refer to",
+    body: "@${1:200} as :${2:done}\n${3:WB} is ${4:Idle}",
+    scope: ["timing"],
+    setup: TIMELINE,
+  },
+  {
+    prefix: "timeline",
+    description: "All state changes of one participant, listed by time",
+    body: "@${1:WB}\n${2:0} is ${3:Idle}\n+${4:100} is ${5:Processing}\n+${6:200} is $3",
+    scope: ["timing"],
+    setup: PLAYERS,
+  },
+  {
+    prefix: "message",
+    description: "Message between two participants at the current time",
+    body: "${1:WU} -> ${2:WB} : ${3:URL}",
+    scope: ["timing"],
+    setup: TIMELINE,
+  },
+  {
+    prefix: "constraint",
+    description: "Duration arrow between two time points of a participant",
+    body: "${1:WB}@${2:0} <-> @${3:100} : ${4:100 ms}",
+    scope: ["timing"],
+    setup: TIMELINE,
+  },
+  {
+    prefix: "highlight",
+    description: "Highlight a time span with a colour and a caption",
+    body: "highlight ${1:0} to ${2:100} #${3:Gold} : ${4:Loading}",
+    scope: ["timing"],
+    setup: TIMELINE,
+  },
+  {
+    prefix: "scale-time",
+    description: "Set how many pixels a span of time takes",
+    body: "scale ${1:100} as ${2:50} pixels",
+    scope: ["timing"],
+    setup: TIMELINE,
+  },
+  {
+    prefix: "hide-axis",
+    description: "Hide the time axis",
+    body: "hide time-axis",
+    scope: ["timing"],
+    setup: TIMELINE,
+  },
+  {
+    prefix: "note",
+    description: "Note above or below a participant at the current time",
+    body: "note ${1|top,bottom|} of ${2:WB} : ${3:text}",
+    scope: ["timing"],
+    setup: TIMELINE,
+  },
+];

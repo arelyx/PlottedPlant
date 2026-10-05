@@ -1,0 +1,5 @@
+@startuml
+partition Checkout {
+  :Pay;
+}
+@enduml

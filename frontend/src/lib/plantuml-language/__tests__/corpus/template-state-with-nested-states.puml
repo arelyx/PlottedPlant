@@ -1,0 +1,21 @@
+@startuml
+[*] --> Active
+
+state Active {
+    [*] --> Idle
+    Idle --> Processing : receive job
+    Processing --> Idle : job complete
+    Processing --> Error : failure
+
+    state Error {
+        [*] --> Retrying
+        Retrying --> Retrying : retry
+        Retrying --> [*] : max retries
+    }
+
+    Error --> Idle : recovered
+}
+
+Active --> Shutdown : stop signal
+Shutdown --> [*]
+@enduml

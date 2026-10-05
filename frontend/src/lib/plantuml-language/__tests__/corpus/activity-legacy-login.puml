@@ -1,0 +1,20 @@
+@startuml
+' Legacy activity syntax: (*) start/end, quoted activities, arrows with [labels]
+(*) --> "Open login page"
+--> "Enter credentials" as creds
+note right: at most 3 attempts
+if "Credentials valid?" then
+  -->[yes] "Load profile"
+  -right-> "Show dashboard"
+  --> (*)
+else
+  ->[no] "Show error"
+  -->[retry] creds
+endif
+partition Audit {
+  "Show error" --> "Log failed attempt"
+}
+"Log failed attempt" --> ===B1===
+===B1=== --> "Notify security"
+"Notify security" --> (*)
+@enduml

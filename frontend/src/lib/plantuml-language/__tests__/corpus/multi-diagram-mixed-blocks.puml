@@ -1,0 +1,48 @@
+Notes before the first diagram are ignored by PlantUML.
+
+@startuml overview
+actor User
+User -> App : open
+App --> User : page
+@enduml
+
+@startmindmap
+* Roadmap
+** Q1
+*** Search
+** Q2
+*** Offline mode
+@endmindmap
+
+@startgantt
+project starts 2026-01-05
+[Search] lasts 20 days
+[Offline mode] lasts 30 days
+[Offline mode] starts at [Search]'s end
+@endgantt
+
+@startjson
+{ "version": "4.2", "features": ["search", "offline"], "beta": false }
+@endjson
+
+@startyaml
+version: 4.2
+features:
+  - search
+  - offline
+@endyaml
+
+@startsalt
+{
+  Search | "query      "
+  [ Go ] | [ Reset ]
+}
+@endsalt
+
+@startuml classes
+class App {
+  +open(): Page
+}
+class Page
+App --> Page
+@enduml

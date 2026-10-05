@@ -1,0 +1,29 @@
+@startuml
+class User {
+    +id: int
+    +email: String
+    +register(): void
+    +login(): void
+}
+
+class Order {
+    +id: int
+    +total: Decimal
+    +place(): void
+    +cancel(): void
+}
+
+class Product {
+    +id: int
+    +name: String
+    +price: Decimal
+}
+
+class OrderItem {
+    +quantity: int
+}
+
+User "1" --> "*" Order : places
+Order "1" *-- "*" OrderItem : contains
+OrderItem "*" --> "1" Product : references
+@enduml

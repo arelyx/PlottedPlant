@@ -1,0 +1,44 @@
+@startuml
+' Information-engineering notation with crow's-foot relations
+hide circle
+skinparam linetype ortho
+
+entity "author" as author {
+  *id : bigint <<PK>>
+  --
+  *email : varchar(255) <<unique>>
+  display_name : varchar(80)
+  created_at : timestamptz
+}
+entity post {
+  *id : bigint <<PK>>
+  *author_id : bigint <<FK>>
+  --
+  *title : text
+  body : text
+  published_on : date
+}
+entity comment {
+  *id : bigint <<PK>>
+  *post_id : bigint <<FK>>
+  author_id : bigint <<FK>>
+  --
+  body : text
+}
+entity tag {
+  *id : int <<PK>>
+  --
+  *name : varchar(40)
+}
+entity post_tag {
+  *post_id : bigint <<FK>>
+  *tag_id : int <<FK>>
+}
+
+author ||--o{ post : writes
+post ||--o{ comment : has
+author |o--o{ comment : leaves
+post ||--|{ post_tag
+tag ||..o{ post_tag
+post }o--|| author : edited by
+@enduml

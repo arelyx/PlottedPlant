@@ -1,0 +1,27 @@
+@startuml
+package "Domain" {
+    class Entity {
+        +id: int
+    }
+    class User extends Entity {
+        +email: String
+    }
+    class Document extends Entity {
+        +title: String
+        +content: String
+    }
+}
+
+package "Repository" {
+    interface Repository<T> {
+        +findById(id: int): T
+        +save(entity: T): void
+        +delete(id: int): void
+    }
+    class UserRepository implements Repository
+    class DocumentRepository implements Repository
+}
+
+UserRepository ..> User
+DocumentRepository ..> Document
+@enduml

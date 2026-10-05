@@ -1,0 +1,31 @@
+@startuml
+' Object diagram with a map and inline JSON
+object "Central Library" as lib {
+  city = "Leeds"
+  opened = 1884
+}
+object book1 {
+  title = "Dune"
+  isbn = "978-0441172719"
+}
+object member
+member : name = "Ada"
+member : since = 2024-05-17
+
+map Shelves {
+  A1 => fiction
+  B2 => science
+  C3 *-> book1
+}
+
+json Settings {
+  "loanDays": 21,
+  "renewals": [1, 2, 3],
+  "notify": { "email": true, "sms": null }
+}
+
+lib *-- book1 : holds
+member --> book1 : borrowed
+lib o-- Shelves
+lib .. Settings
+@enduml

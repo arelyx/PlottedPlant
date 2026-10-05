@@ -1,0 +1,13 @@
+@startsalt
+{+
+    Login
+    ==
+    {
+        Email    | "user@example.com   "
+        Password | "****               "
+    }
+    [  Cancel  ] | [  **Login**  ]
+    ---
+    <i>Forgot password?</i>
+}
+@endsalt

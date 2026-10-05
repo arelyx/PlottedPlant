@@ -1,0 +1,5 @@
+@startuml
+entity Order
+entity Customer
+Order -> Customer : belongs
+@enduml

@@ -1,0 +1,38 @@
+@startgantt
+title Product launch
+project starts 2026-02-02
+saturday are closed
+sunday are closed
+2026-02-16 is closed
+2026-03-09 to 2026-03-13 is closed
+printscale weekly zoom 2
+language en
+hide footbox
+
+-- Discovery --
+[User research] as [UR] lasts 8 days
+[UR] is colored in LightBlue/Navy
+[Requirements] lasts 5 days
+[Requirements] starts at [UR]'s end
+[Kick-off] happens at [UR]'s start
+
+-- Build --
+[Backend] on {Dana} {Eli:50%} lasts 15 days
+[Backend] starts 2026-02-23
+then [Frontend] on {Fay} lasts 12 days
+[Frontend] is 40% completed
+[QA] requires 6 days
+[QA] starts 2 days after [Frontend]'s end
+[Backend] -> [QA]
+{Dana} is off on 2026-02-25
+
+-- Launch --
+[Beta] lasts 1 week
+[Beta] starts at [QA]'s end
+[Go live] happens 2026-04-17
+[Go live] is colored in #C0392B
+[Retro] starts D+60
+[Retro] lasts 1 day
+today is 2026-03-02
+today is colored in #AAF
+@endgantt

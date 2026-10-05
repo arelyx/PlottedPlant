@@ -1,0 +1,18 @@
+@startuml
+object user {
+  name = "Ann"
+  id = 12
+}
+object "Shopping Cart" as cart
+map CapitalCity {
+  UK => London
+  USA => Washington
+}
+json Config {
+  "debug": true,
+  "ports": [80, 443]
+}
+user --> cart : owns
+cart ..> CapitalCity
+cart : items = 3
+@enduml

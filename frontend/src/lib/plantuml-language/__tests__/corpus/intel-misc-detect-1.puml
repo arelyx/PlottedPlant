@@ -1,0 +1,5 @@
+@startuml
+title Just arrows
+A -> B
+B --> C : label
+@enduml

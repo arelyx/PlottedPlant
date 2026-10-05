@@ -1,0 +1,44 @@
+@startuml
+skinparam component {
+  BackgroundColor<<db>> Wheat
+  BorderColor Black
+  ArrowColor #FF6655
+}
+<style>
+  note {
+    BackgroundColor #FEFECE
+    FontSize 12
+  }
+  componentDiagram {
+    component {
+      LineColor DarkSlateGray
+    }
+  }
+</style>
+
+node "Server" as srv {
+  component api [
+    REST API
+    ----
+    * JSON
+    ** versioned
+  ]
+  database "Main DB" as db <<db>> {
+    folder schemas {
+      artifact users
+    }
+  }
+  rectangle "Queue" #line:red;back:LightYellow {
+    queue jobs
+  }
+}
+
+cloud Internet
+actor User as "End
+user"
+
+User --> Internet
+Internet --> api
+api -[#blue,dashed]-> db : SQL
+api --> jobs
+@enduml

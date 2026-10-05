@@ -1,0 +1,13 @@
+@startuml
+(*) --> "First Activity"
+"First Activity" --> "Second Activity" as A2
+if "Some Test" then
+  -->[true] "Some Action"
+  --> "Another Action"
+  -right-> (*)
+else
+  ->[false] "Something else"
+  -->[Ending process] (*)
+endif
+A2 --> (*)
+@enduml

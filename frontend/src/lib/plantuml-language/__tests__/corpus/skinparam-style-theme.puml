@@ -1,0 +1,41 @@
+@startuml
+!theme plain
+skinparam backgroundColor #FDFDFD
+skinparam shadowing false
+skinparam defaultFontName "Fira Sans"
+skinparam roundCorner 12
+skinparam ArrowColor #555555
+skinparam sequence {
+  ParticipantBackgroundColor #E8F0FE
+  ParticipantBorderColor Navy
+  LifeLineBorderColor gray
+  ArrowThickness 1.5
+}
+skinparam note {
+  BackgroundColor<<warning>> #FFF3CD
+  BorderColor<<warning>> DarkOrange
+}
+<style>
+sequenceDiagram {
+  actor {
+    LineColor #1A73E8
+    FontStyle bold
+  }
+  .highlight {
+    BackgroundColor LightYellow
+    FontColor #333
+    RoundCorner 8
+  }
+  group {
+    LineThickness 2
+  }
+}
+</style>
+actor User
+participant Service <<highlight>>
+User -> Service : request
+note right <<warning>> : styled by skinparam
+group Retry
+  Service --> User : response
+end
+@enduml

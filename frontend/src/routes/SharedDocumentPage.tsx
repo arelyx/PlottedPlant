@@ -2,7 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import Editor from "@monaco-editor/react";
-import { registerPlantUMLLanguage } from "@/lib/plantuml-monaco";
+import {
+  PLANTUML_EDITOR_OPTIONS,
+  plantumlTheme,
+  registerPlantUMLLanguage,
+} from "@/lib/plantuml-language";
 import {
   Panel,
   Group,
@@ -236,9 +240,9 @@ export function SharedDocumentPage() {
             <Editor
               height="100%"
               language="plantuml"
-              theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
+              theme={plantumlTheme(resolvedTheme)}
               value={content}
-              onMount={(_editor, monaco) => registerPlantUMLLanguage(monaco)}
+              beforeMount={registerPlantUMLLanguage}
               onChange={(val) => {
                 if (val !== undefined && !isReadOnly) {
                   setContent(val);
@@ -246,6 +250,7 @@ export function SharedDocumentPage() {
                 }
               }}
               options={{
+                ...PLANTUML_EDITOR_OPTIONS,
                 readOnly: isReadOnly,
                 minimap: { enabled: false },
                 fontSize: preferences.editor_font_size,

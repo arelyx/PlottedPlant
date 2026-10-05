@@ -1,0 +1,32 @@
+@startmindmap
+<style>
+mindmapDiagram {
+  node {
+    BackgroundColor #FAFAFA
+  }
+  .urgent {
+    BackgroundColor Pink
+    FontColor #900
+  }
+}
+</style>
+title Release 4.2
+caption drafted 2026-01-15
+* Release 4.2
+** Features
+*** Dark mode
+*** <&star> Offline sync <<urgent>>
+***_ nice to have: **themes**
+** Quality
+***[#LightGreen] Unit tests
+***[#Orange] Load test at 500 rps
+***:Security review
+with //external// auditor;
+left side
+** Risks
+*** Vendor delay -> slip 2 weeks
+*** Staff holidays
+** People
+*** Dana
+*** Eli
+@endmindmap

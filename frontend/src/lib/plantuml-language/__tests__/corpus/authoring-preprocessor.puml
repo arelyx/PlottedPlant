@@ -1,0 +1,68 @@
+@startuml
+!$debug = %true()
+!$count = 3
+!$config = {
+  "name": "demo",
+  "tags": ["a", "b"],
+  "nested": {
+    "depth": 2
+  }
+}
+
+!function $double($x)
+  !return $x * 2
+!endfunction
+
+!function $inc($x) !return $x + 1
+
+!procedure $actor($name, $color="LightBlue")
+  participant $name #$color
+!endprocedure
+
+!unquoted procedure $say(from, to, text)
+  from -> to : text
+!endprocedure
+
+!definelong GROUPED(label)
+group label
+  Alice -> Bob : inside
+end
+!enddefinelong
+
+/'
+  A block comment
+    with its own indentation
+'/
+
+$actor("Alice")
+$actor("Bob", "Wheat")
+
+!if $debug
+  $say(Alice, Bob, debug on)
+  !ifdef UNDEFINED_NAME
+    Alice -> Bob : never
+  !else
+    Alice -> Bob : fallback
+  !endif
+!elseif $count > 5
+  Alice -> Bob : many
+!else
+  Alice -> Bob : few
+!endif
+
+!foreach $tag in $config.tags
+  Alice -> Bob : tag $tag
+!endfor
+
+!$i = 0
+!while $i < $count
+  Bob --> Alice : tick $i
+  !$i = $inc($i)
+!endwhile
+
+GROUPED(macro)
+
+!startsub SHARED
+Alice -> Bob : shared part
+!endsub
+@enduml

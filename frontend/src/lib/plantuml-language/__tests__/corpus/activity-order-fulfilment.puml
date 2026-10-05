@@ -1,0 +1,58 @@
+@startuml
+title Order fulfilment
+|Customer|
+start
+:Place order;
+note right: order date 2026-04-02
+|#AntiqueWhite|Warehouse|
+partition "Picking" {
+  if (In stock?) then (yes)
+    :Reserve items;
+    fork
+      :Print label;
+    fork again
+      :Pack parcel;
+      -[#blue,dashed]-> packed;
+    end fork
+  elseif (Back-order possible?) then (maybe)
+    #LightYellow:Wait for supplier
+    up to **10 days**;
+  else (no)
+    #Pink:Cancel order;
+    stop
+  endif
+}
+while (Parcels left?) is (yes)
+  :Hand over to carrier;
+  -> next parcel;
+endwhile (no)
+repeat
+  :Notify customer;
+  backward :Fix address;
+repeat while (Bounced?) is (yes) not (no)
+switch (Carrier)
+case (Post)
+  :Standard tracking;
+case (Courier)
+  :Live tracking;
+  detach
+endswitch
+split
+  :Send invoice;
+split again
+  :Update stock; <<output>>
+end split
+|Customer|
+:Receive parcel;
+note left
+  A --> B is just text here
+  ====
+  * signed for
+  * photo //attached//
+end note
+floating note right: Returns within 30 days
+group Aftercare
+  :Ask for review;
+end group
+kill
+@enduml

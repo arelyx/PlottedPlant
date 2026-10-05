@@ -1,0 +1,24 @@
+@startuml
+skinparam rectangle<<behavior>> {
+  roundCorner 25
+}
+sprite $bProcess jar:archimate/business-process
+sprite $aService jar:archimate/application-service
+
+archimate #Business "Claim handling" as claim <<business-process>>
+archimate #Application "Claims service" as svc <<application-service>>
+archimate #Technology "App server" as server <<technology-device>>
+rectangle "Register claim" as register <<$bProcess>><<behavior>> #Business
+rectangle "Policy lookup" as lookup <<$aService>><<behavior>> #Application
+
+claim -down-> register
+register -down-> svc
+svc -down-> lookup
+svc ..> server : runs on
+legend left
+  Example in ArchiMate style
+  ====
+  <$bProcess> : business process
+  <$aService> : application service
+endlegend
+@enduml

@@ -1,0 +1,31 @@
+@startuml
+entity "User" as user {
+    *id : bigint <<PK>>
+    --
+    *email : varchar
+    *username : varchar
+    display_name : varchar
+    created_at : timestamptz
+}
+
+entity "Document" as doc {
+    *id : bigint <<PK>>
+    --
+    *title : text
+    *owner_id : bigint <<FK>>
+    folder_id : bigint <<FK>>
+    current_content : text
+    updated_at : timestamptz
+}
+
+entity "Folder" as folder {
+    *id : bigint <<PK>>
+    --
+    *name : text
+    *owner_id : bigint <<FK>>
+}
+
+user ||--o{ doc : owns
+user ||--o{ folder : owns
+folder ||--o{ doc : contains
+@enduml

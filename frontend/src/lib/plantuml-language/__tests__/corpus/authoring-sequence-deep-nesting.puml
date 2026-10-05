@@ -1,0 +1,47 @@
+@startuml
+participant Client
+participant Gateway
+participant Service
+database Store
+
+box "Backend" #LightBlue
+  participant Service
+  database Store
+end box
+
+Client -> Gateway: request
+alt authenticated
+  Gateway -> Service: forward
+  loop for each item
+    Service -> Store: read
+    opt cache miss
+      Store --> Service: row
+      par
+        Service -> Store: warm cache
+      else
+        Service -> Gateway: partial
+      end
+    end
+    critical commit
+      Service -> Store: write
+    else rollback
+      Service -> Store: undo
+    end
+  end
+  group Audit [trail]
+    Service -> Store: log
+    break quota exceeded
+      Service --> Gateway: 429
+    end
+  end
+  Gateway --> Client: 200
+else anonymous
+  Gateway --> Client: 401
+else also blocked
+  Gateway --> Client: 403
+end
+ref over Client, Gateway
+  See the login
+  sequence
+end ref
+@enduml

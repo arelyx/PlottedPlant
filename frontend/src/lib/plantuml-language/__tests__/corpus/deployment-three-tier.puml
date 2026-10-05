@@ -1,0 +1,42 @@
+@startuml
+left to right direction
+actor User
+node "Load balancer" as lb <<nginx>>
+node "App server 1" as app1 {
+  artifact "shop.war" as war1
+}
+node "App server 2" as app2 {
+  artifact "shop.war" as war2
+}
+database "Primary DB" as db1
+database "Replica" as db2
+storage "Object store" as s3
+cloud Internet
+frame "Monitoring" {
+  agent Prometheus
+  card Grafana
+}
+folder Backups
+file "nginx.conf" as conf
+queue Jobs
+stack Cache
+rectangle DMZ #line.dashed {
+  boundary Firewall
+}
+User --> Internet
+Internet --> Firewall
+Firewall --> lb : 443
+lb --> app1
+lb --> app2
+app1 --> db1
+app2 --> db1
+db1 ..> db2 : replicates
+app1 --> s3
+app2 --> Jobs
+Jobs --> Cache
+Prometheus ..> app1 : scrapes
+Prometheus ..> app2
+Grafana --> Prometheus
+db1 --> Backups : nightly 02:00
+lb .. conf
+@enduml

@@ -1,0 +1,14 @@
+@startjson
+{
+    "user": {
+        "id": 1,
+        "name": "Alice",
+        "email": "alice@example.com",
+        "roles": ["admin", "editor"],
+        "preferences": {
+            "theme": "dark",
+            "language": "en"
+        }
+    }
+}
+@endjson

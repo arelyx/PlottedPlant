@@ -1,0 +1,21 @@
+@startuml
+nwdiag {
+    internet [shape = cloud];
+    internet -- dmz
+
+    network dmz {
+        address = "10.0.1.0/24"
+
+        web01 [address = "10.0.1.1"];
+        web02 [address = "10.0.1.2"];
+    }
+
+    network internal {
+        address = "10.0.2.0/24"
+
+        web01 [address = "10.0.2.1"];
+        web02 [address = "10.0.2.2"];
+        db01 [address = "10.0.2.100"];
+    }
+}
+@enduml

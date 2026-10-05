@@ -1,0 +1,4 @@
+@startregex
+title ISO date
+^(?<year>\d{4})-(0[1-9]|1[0-2])-([0-2]\d|3[01])(T\d{2}:\d{2})?$
+@endregex

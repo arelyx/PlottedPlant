@@ -1,0 +1,25 @@
+@startuml
+actor User
+participant "Web App" as App
+participant "API Server" as API
+database "Database" as DB
+
+User -> App: Submit Form
+activate App
+
+App -> API: POST /data
+activate API
+
+note right of API: Validate input
+
+API -> DB: INSERT record
+activate DB
+DB --> API: OK
+deactivate DB
+
+API --> App: 201 Created
+deactivate API
+
+App --> User: Show success
+deactivate App
+@enduml

@@ -1,0 +1,43 @@
+@startuml
+' all eight participant keywords, aliases, implicit participants
+participant "Web Browser" as Browser
+actor User
+boundary Gateway
+control Router
+entity Order
+database "Orders DB" as DB #LightBlue
+collections Workers
+queue Jobs
+participant Late order 30
+
+box "Internal" #LightYellow
+  participant Cache
+end box
+
+User -> Browser: open page
+Browser -> Gateway ++: GET /orders
+Gateway -> Router: route
+Router -> Order: load
+Order -> DB: select
+DB --> Order: rows
+activate Order
+Order -> Workers: fan out
+Workers ->> Jobs: enqueue
+deactivate Order
+Gateway --> Browser --: 200 OK
+note left of Browser: rendered
+note over Gateway, Router
+  Browser -> Gateway is free text here
+end note
+Implicit -> Cache: warm
+"Quoted Name" -> Implicit: hello
+destroy Cache
+== Done ==
+alt success
+  Browser -> User: show
+else failure
+  Browser -> User: error
+end
+ref over Browser, Gateway: see other diagram
+User -> Late: finally
+@enduml

@@ -1,0 +1,17 @@
+@startuml
+entity "Customer" as cust {
+  *id : number <<generated>>
+  --
+  name : text
+}
+entity Order {
+  *id : number
+  --
+  *customer_id : number <<FK>>
+}
+entity "Line Item" as item {
+  *id : number
+}
+cust ||--o{ Order : places
+Order ||--|{ item
+@enduml

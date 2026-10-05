@@ -1,0 +1,44 @@
+' Three diagrams in one document.
+@startuml
+Alice -> Bob: first diagram
+alt ok
+  Bob --> Alice: fine
+end
+@enduml
+
+@startmindmap
+* Root
+** Branch A
+*** Leaf A1
+*** Leaf A2
+** Branch B
+***:Multi-line
+node;
+left side
+** Branch C
+*** Leaf C1
+@endmindmap
+
+@startjson
+{
+  "name": "third",
+  "list": [1, 2, {"deep": true}],
+  "object": {
+    "key": "value with } brace and [ bracket"
+  }
+}
+@endjson
+
+@startsalt
+{+
+  Login    | "MyName   "
+  Password | "****     "
+  {T
+   + World
+   ++ America
+   +++ Canada
+   ++ Europe
+  }
+  [Cancel] | [  OK   ]
+}
+@endsalt

@@ -1,0 +1,21 @@
+@startuml
+<style>
+sequenceDiagram {
+  participant {
+    BackgroundColor LightBlue
+    FontColor #333333
+  }
+  arrow {
+    LineColor Navy
+  }
+}
+</style>
+skinparam backgroundColor #FEFEFE
+skinparam sequence {
+  ArrowColor DeepSkyBlue
+  ParticipantBorderColor Navy
+}
+skinparam ParticipantPadding 20
+Alice -[#red]> Bob : hello
+Bob -> Alice : <color:Blue>hi</color> <&check> <:smile:>
+@enduml

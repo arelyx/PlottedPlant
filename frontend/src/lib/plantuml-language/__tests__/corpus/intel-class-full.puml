@@ -1,0 +1,42 @@
+@startuml
+package "Domain Model" as domain {
+  abstract class Shape<T extends Number> {
+    +area(): double
+    #name: String
+    {static} count: int
+  }
+  interface Drawable {
+    +draw()
+  }
+  enum Color {
+    RED
+    GREEN
+    BLUE
+  }
+  class Circle extends Shape implements Drawable {
+    -radius: double
+  }
+  class "Rounded Square" as RSquare
+  annotation Marker
+  struct Point {
+    x: int
+    y: int
+  }
+  exception ShapeError
+}
+namespace util {
+  class Helper
+}
+entity Record
+Shape <|-- RSquare
+Circle *-- Point : center
+Circle --> Color
+RSquare ..> Marker : <<uses>>
+util.Helper --> Circle
+note right of Circle: Circle --> Color in a note
+note "floating" as N1
+N1 .. Shape
+class Circle <<Serializable>>
+Circle : +scale(f: double)
+hide empty members
+@enduml

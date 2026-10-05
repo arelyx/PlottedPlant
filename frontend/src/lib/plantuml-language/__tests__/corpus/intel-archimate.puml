@@ -1,0 +1,8 @@
+@startuml
+archimate #Technology "VPN Server" as vpnServerA <<technology-device>>
+archimate #Business "Customer" as cust <<business-actor>>
+rectangle GO #lightgreen
+rectangle STOP #red
+cust --> vpnServerA
+GO -up-> STOP
+@enduml
