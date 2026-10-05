@@ -29,7 +29,7 @@ export function VersionPreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[90vw] h-[85vh] flex flex-col p-0 gap-0">
+      <DialogContent className="sm:max-w-[90vw] h-[85dvh] flex flex-col p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-3 shrink-0">
           <DialogTitle>Version {versionNumber}</DialogTitle>
         </DialogHeader>

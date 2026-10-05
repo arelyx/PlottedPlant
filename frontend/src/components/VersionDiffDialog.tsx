@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import { MergeView } from "@codemirror/merge";
+import { MergeView, unifiedMergeView } from "@codemirror/merge";
 import { EditorView, basicSetup } from "codemirror";
 import { EditorState } from "@codemirror/state";
 import { usePreferencesStore } from "@/stores/preferences";
@@ -27,7 +27,7 @@ export function VersionDiffDialog({
   diff,
 }: VersionDiffDialogProps) {
   const { resolvedTheme } = usePreferencesStore();
-  const mergeViewRef = useRef<MergeView | null>(null);
+  const mergeViewRef = useRef<MergeView | EditorView | null>(null);
   const diffRef = useRef(diff);
   const themeRef = useRef(resolvedTheme);
   diffRef.current = diff;
@@ -61,44 +61,40 @@ export function VersionDiffDialog({
     const themeExtensions =
       themeRef.current === "dark" ? [oneDark] : [];
 
-    const view = new MergeView({
-      a: {
-        doc: d.base_content,
-        extensions: [
-          basicSetup,
-          plantumlLanguage,
-          EditorView.editable.of(false),
-          EditorState.readOnly.of(true),
-          EditorView.theme({
-            "&": { height: "100%" },
-            ".cm-scroller": { overflow: "auto" },
-          }),
-          ...themeExtensions,
-        ],
-      },
-      b: {
-        doc: d.compare_content,
-        extensions: [
-          basicSetup,
-          plantumlLanguage,
-          EditorView.editable.of(false),
-          EditorState.readOnly.of(true),
-          EditorView.theme({
-            "&": { height: "100%" },
-            ".cm-scroller": { overflow: "auto" },
-          }),
-          ...themeExtensions,
-        ],
-      },
-      parent: node,
-    });
+    const readOnlyExtensions = [
+      basicSetup,
+      plantumlLanguage,
+      EditorView.editable.of(false),
+      EditorState.readOnly.of(true),
+      EditorView.theme({
+        "&": { height: "100%" },
+        ".cm-scroller": { overflow: "auto" },
+      }),
+      ...themeExtensions,
+    ];
 
+    // Side-by-side columns are too narrow to read on a phone; show one
+    // column with deletions inline instead.
+    const view = window.matchMedia("(max-width: 767px)").matches
+      ? new EditorView({
+          doc: d.compare_content,
+          extensions: [
+            ...readOnlyExtensions,
+            unifiedMergeView({ original: d.base_content, mergeControls: false }),
+          ],
+          parent: node,
+        })
+      : new MergeView({
+          a: { doc: d.base_content, extensions: readOnlyExtensions },
+          b: { doc: d.compare_content, extensions: readOnlyExtensions },
+          parent: node,
+        });
     mergeViewRef.current = view;
   }, []);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[90vw] h-[85vh] flex flex-col p-0 gap-0">
+      <DialogContent className="sm:max-w-[90vw] h-[85dvh] flex flex-col p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-3 shrink-0">
           <DialogTitle>
             Comparing v{diff.base_version} with v{diff.compare_version}
@@ -109,7 +105,7 @@ export function VersionDiffDialog({
           {open && (
             <div
               ref={containerCallback}
-              className="h-full [&_.cm-mergeView]:h-full [&_.cm-mergeViewEditor]:overflow-auto"
+              className="h-full [&_.cm-mergeView]:h-full [&_.cm-mergeViewEditor]:overflow-auto [&>.cm-editor]:h-full"
             />
           )}
         </div>
