@@ -344,11 +344,20 @@ export function DocumentPage() {
       () => setShowHistory((prev) => !prev)
     );
 
+    // Hiding the editor (Preview mode) unmounts it; forget the disposed
+    // instance so a reconnect while hidden doesn't try to bind to it.
+    editor.onDidDispose(() => {
+      if (editorRef.current === editor) editorRef.current = null;
+    });
+
     // Bind y-monaco to the editor only if the collaboration session has
     // already synced. If not synced yet, the onSynced callback will create
-    // the binding once Y.Text has content from the server.
+    // the binding once Y.Text has content from the server. On a remount the
+    // old binding belongs to the disposed model (y-monaco tears it down with
+    // the model), so replace it or edits silently stop syncing.
     const session = collabSessionRef.current;
-    if (session && !session.binding && syncedRef.current) {
+    if (session && syncedRef.current && session.binding?.monacoModel !== editor.getModel()) {
+      session.binding?.destroy();
       bindMonacoEditor(session, editor);
     }
   };
