@@ -191,7 +191,7 @@ export function VersionHistoryPanel({
   const isOwner = permission === "owner";
 
   return (
-    <div className="w-72 border-l flex flex-col h-full bg-background">
+    <div className="fixed inset-x-0 bottom-0 top-14 z-40 w-full md:static md:inset-auto md:z-auto md:w-72 border-l flex flex-col md:h-full bg-background">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b">
         <h3 className="text-sm font-medium">Version History</h3>
@@ -205,7 +205,7 @@ export function VersionHistoryPanel({
             Checkpoint
           </Button>
           <button
-            className="p-1 rounded hover:bg-accent text-muted-foreground"
+            className="p-1 pointer-coarse:p-2 rounded hover:bg-accent text-muted-foreground"
             onClick={onClose}
             title="Close"
           >
@@ -279,16 +279,16 @@ export function VersionHistoryPanel({
                       {relativeTime(v.created_at)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-0.5">
+                  <div className="flex items-center gap-0.5 pointer-coarse:gap-2">
                     <input
                       type="checkbox"
-                      className="h-3 w-3"
+                      className="h-3 w-3 pointer-coarse:size-5"
                       checked={compareSelection.includes(v.version_number)}
                       onChange={() => handleCompareToggle(v.version_number)}
                       title="Select for comparison"
                     />
                     <button
-                      className="text-[10px] px-1.5 py-0.5 rounded hover:bg-accent text-muted-foreground"
+                      className="text-[10px] px-1.5 py-0.5 pointer-coarse:text-xs pointer-coarse:px-3 pointer-coarse:py-2 rounded hover:bg-accent text-muted-foreground"
                       onClick={() => handlePreview(v.version_number)}
                     >
                       View

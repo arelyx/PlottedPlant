@@ -61,7 +61,7 @@ export function TemplatePickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogContent className="sm:max-w-2xl max-h-[85dvh] flex flex-col">
         <DialogHeader>
           <DialogTitle>New Document</DialogTitle>
         </DialogHeader>

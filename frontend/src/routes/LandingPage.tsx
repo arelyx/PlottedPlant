@@ -8,22 +8,27 @@ import {
   registerPlantUMLLanguage,
 } from "@/lib/plantuml-language";
 import { engineErrorMarkers } from "@/lib/plantuml-language/monaco/authoring";
-import {
-  Panel,
-  Group,
-  Separator,
-} from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DiagramPreview } from "@/components/DiagramPreview";
+import {
+  EditorWorkspace,
+  MOBILE_EDITOR_OPTIONS,
+  MoreIcon,
+  ViewModeToggle,
+  type ViewMode,
+} from "@/components/EditorWorkspace";
+import { useIsMobile } from "@/hooks/useMediaQuery";
 import { useAuthStore } from "@/stores/auth";
 import { api } from "@/lib/api";
-import { sanitizeSvg } from "@/lib/sanitize";
 import { PitchModal } from "@/components/PitchModal";
 import {
   renderPreview,
@@ -35,8 +40,6 @@ import {
 // --- Types ---
 
 type RenderError = RenderErrorInfo;
-
-type ViewMode = "split" | "editor" | "preview";
 
 // --- Constants ---
 
@@ -120,7 +123,7 @@ export function LandingPage() {
 
   // View controls
   const [viewMode, setViewMode] = useState<ViewMode>("split");
-  const [zoom, setZoom] = useState(100);
+  const isMobile = useIsMobile();
   const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
   const [lineCount, setLineCount] = useState(initialContent.split("\n").length);
 
@@ -264,11 +267,11 @@ export function LandingPage() {
   };
 
   return (
-    <div className="dark flex flex-col h-screen bg-background text-foreground">
+    <div className="dark flex flex-col h-dvh bg-background text-foreground">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b bg-background shrink-0">
-        <div className="flex items-center gap-2">
-          <Link to="/" className="text-sm font-bold hover:opacity-80">
+      <div className="flex items-center justify-between gap-2 px-2 sm:px-3 py-1.5 border-b bg-background shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <Link to="/" className="text-sm font-bold hover:opacity-80 shrink-0">
             PlottedPlant
           </Link>
           <span className="text-muted-foreground">/</span>
@@ -278,241 +281,180 @@ export function LandingPage() {
               onChange={(e) => setTitle(e.target.value)}
               onBlur={() => setEditingTitle(false)}
               onKeyDown={(e) => e.key === "Enter" && setEditingTitle(false)}
-              className="h-7 w-64 text-sm"
+              className="h-7 w-40 sm:w-64 text-sm"
               autoFocus
             />
           ) : (
             <button
-              className="text-sm font-medium hover:underline"
+              className="text-sm font-medium hover:underline truncate min-w-0"
               onClick={() => setEditingTitle(true)}
+              title={title}
             >
               {title}
             </button>
           )}
           <Link
             to="/templates"
-            className="text-sm text-muted-foreground hover:text-foreground"
+            className="hidden md:inline text-sm text-muted-foreground hover:text-foreground"
           >
             Templates
           </Link>
         </div>
 
-        <div className="flex items-center gap-1">
-          {/* View mode toggle */}
-          <div className="flex border rounded-md">
-            <button
-              className={`px-2 py-1 text-xs ${viewMode === "editor" ? "bg-accent" : ""}`}
-              onClick={() => setViewMode("editor")}
-              title="Editor only"
+        <div className="flex items-center gap-1 shrink-0">
+          <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
+
+          <div className="hidden md:flex items-center gap-1">
+            {/* Export */}
+            <DropdownMenu>
+              <DropdownMenuTrigger className="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium rounded-md px-3 h-8 hover:bg-accent hover:text-accent-foreground">
+                Export
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={handleExportSvg}
+                  disabled={!svgContent && !lastGoodSvg}
+                >
+                  Download SVG
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportPng}>
+                  Download PNG
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportSource}>
+                  Download Source (.puml)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Share & History → pitch modal */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowPitch(true)}
             >
-              Code
-            </button>
-            <button
-              className={`px-2 py-1 text-xs border-x ${viewMode === "split" ? "bg-accent" : ""}`}
-              onClick={() => setViewMode("split")}
-              title="Split view"
+              Share
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowPitch(true)}
             >
-              Split
-            </button>
-            <button
-              className={`px-2 py-1 text-xs ${viewMode === "preview" ? "bg-accent" : ""}`}
-              onClick={() => setViewMode("preview")}
-              title="Preview only"
-            >
-              Preview
-            </button>
+              History
+            </Button>
+
+            {/* Auth links */}
+            <div className="ml-1 border-l pl-2 flex items-center gap-1">
+              {user ? (
+                <Button asChild size="sm">
+                  <Link to="/dashboard">Dashboard</Link>
+                </Button>
+              ) : (
+                <>
+                  <Button asChild variant="ghost" size="sm">
+                    <Link to="/login">Sign in</Link>
+                  </Button>
+                  <Button asChild size="sm">
+                    <Link to="/register">Create account</Link>
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
 
-          {/* Export */}
+          {/* Phones: the same actions behind one button */}
           <DropdownMenu>
-            <DropdownMenuTrigger className="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium rounded-md px-3 h-8 hover:bg-accent hover:text-accent-foreground">
-              Export
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label="More actions">
+                <MoreIcon />
+              </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={handleExportSvg}
-                disabled={!svgContent && !lastGoodSvg}
-              >
+            <DropdownMenuContent align="end" className="min-w-52">
+              {user ? (
+                <DropdownMenuItem asChild>
+                  <Link to="/dashboard">Dashboard</Link>
+                </DropdownMenuItem>
+              ) : (
+                <>
+                  <DropdownMenuItem asChild>
+                    <Link to="/register">Create account</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/login">Sign in</Link>
+                  </DropdownMenuItem>
+                </>
+              )}
+              <DropdownMenuItem asChild>
+                <Link to="/templates">Templates</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowPitch(true)}>Share</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowPitch(true)}>Version history</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Export</DropdownMenuLabel>
+              <DropdownMenuItem onClick={handleExportSvg} disabled={!svgContent && !lastGoodSvg}>
                 Download SVG
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportPng}>
-                Download PNG
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportSource}>
-                Download Source (.puml)
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportPng}>Download PNG</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportSource}>Download Source (.puml)</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          {/* Share & History → pitch modal */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowPitch(true)}
-          >
-            Share
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowPitch(true)}
-          >
-            History
-          </Button>
-
-          {/* Auth links */}
-          <div className="ml-1 border-l pl-2 flex items-center gap-1">
-            {user ? (
-              <Button asChild size="sm">
-                <Link to="/dashboard">Dashboard</Link>
-              </Button>
-            ) : (
-              <>
-                <Button asChild variant="ghost" size="sm">
-                  <Link to="/login">Sign in</Link>
-                </Button>
-                <Button asChild size="sm">
-                  <Link to="/register">Create account</Link>
-                </Button>
-              </>
-            )}
-          </div>
         </div>
       </div>
 
       {/* Editor + Preview */}
       <div className="flex-1 overflow-hidden">
-        <Group orientation="horizontal">
-          {viewMode !== "preview" && (
-            <>
-              <Panel defaultSize={50} minSize={20}>
-                <Editor
-                  height="100%"
-                  defaultValue={initialContent}
-                  language="plantuml"
-                  theme={plantumlTheme("dark")}
-                  beforeMount={registerPlantUMLLanguage}
-                  onMount={handleEditorMount}
-                  onChange={(val) => {
-                    if (val !== undefined) {
-                      contentRef.current = val;
-                      setLineCount(val.split("\n").length);
-                      saveContent(val);
-                      triggerRender(val);
-                    }
-                  }}
-                  options={{
-                    ...PLANTUML_EDITOR_OPTIONS,
-                    minimap: { enabled: false },
-                    fontSize: 14,
-                    lineNumbers: "on",
-                    wordWrap: "on",
-                    scrollBeyondLastLine: false,
-                    automaticLayout: true,
-                    tabSize: 2,
-                    renderLineHighlight: "line",
-                    bracketPairColorization: { enabled: true },
-                    padding: { top: 8 },
-                  }}
-                />
-              </Panel>
-              {viewMode === "split" && (
-                <Separator className="w-1.5 bg-border hover:bg-primary/20 transition-colors" />
-              )}
-            </>
-          )}
-          {viewMode !== "editor" && (
-            <Panel defaultSize={50} minSize={20}>
-              <div className="h-full flex flex-col bg-muted/30">
-                {/* Preview toolbar */}
-                <div className="flex items-center gap-1 px-2 py-1 border-b text-xs">
-                  <button
-                    className="px-2 py-0.5 rounded hover:bg-accent"
-                    onClick={() => setZoom((z) => Math.min(z + 25, 400))}
-                  >
-                    +
-                  </button>
-                  <span className="min-w-[3rem] text-center">{zoom}%</span>
-                  <button
-                    className="px-2 py-0.5 rounded hover:bg-accent"
-                    onClick={() => setZoom((z) => Math.max(z - 25, 25))}
-                  >
-                    -
-                  </button>
-                  <button
-                    className="px-2 py-0.5 rounded hover:bg-accent ml-1"
-                    onClick={() => setZoom(100)}
-                  >
-                    Reset
-                  </button>
-                  {rendering && (
-                    <span className="ml-auto text-muted-foreground">
-                      Rendering...
-                    </span>
-                  )}
-                </div>
-
-                {/* Preview content */}
-                <div className="flex-1 overflow-auto p-4">
-                  {renderError && !lastGoodSvg ? (
-                    <div className="flex items-center justify-center h-full">
-                      <div className="text-center text-muted-foreground">
-                        <p className="text-sm font-medium text-destructive mb-1">
-                          {renderError.message}
-                        </p>
-                        {renderError.line && (
-                          <p className="text-xs">
-                            Error on line {renderError.line}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="relative min-h-full">
-                      {renderError && lastGoodSvg && (
-                        <div className="absolute top-2 left-2 right-2 z-10 bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2 text-xs">
-                          <span className="text-destructive font-medium">
-                            {renderError.message}
-                          </span>
-                          {renderError.line && (
-                            <span className="text-muted-foreground ml-2">
-                              Line {renderError.line}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      <div
-                        className={`inline-block transition-opacity ${renderError ? "opacity-40" : ""}`}
-                        style={{
-                          transform: `scale(${zoom / 100})`,
-                          transformOrigin: "top left",
-                        }}
-                        dangerouslySetInnerHTML={{
-                          __html: sanitizeSvg(svgContent || lastGoodSvg || ""),
-                        }}
-                      />
-                      {!svgContent && !lastGoodSvg && !rendering && (
-                        <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                          Write some PlantUML to see a preview
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </Panel>
-          )}
-        </Group>
+        <EditorWorkspace
+          viewMode={viewMode}
+          editor={
+            <Editor
+              height="100%"
+              defaultValue={initialContent}
+              language="plantuml"
+              theme={plantumlTheme("dark")}
+              beforeMount={registerPlantUMLLanguage}
+              onMount={handleEditorMount}
+              onChange={(val) => {
+                if (val !== undefined) {
+                  contentRef.current = val;
+                  setLineCount(val.split("\n").length);
+                  saveContent(val);
+                  triggerRender(val);
+                }
+              }}
+              options={{
+                ...PLANTUML_EDITOR_OPTIONS,
+                minimap: { enabled: false },
+                fontSize: 14,
+                lineNumbers: "on",
+                wordWrap: "on",
+                scrollBeyondLastLine: false,
+                automaticLayout: true,
+                tabSize: 2,
+                renderLineHighlight: "line",
+                bracketPairColorization: { enabled: true },
+                padding: { top: 8 },
+                ...(isMobile ? MOBILE_EDITOR_OPTIONS : {}),
+              }}
+            />
+          }
+          preview={
+            <DiagramPreview
+              svg={svgContent || lastGoodSvg}
+              error={renderError}
+              rendering={rendering}
+              placeholder="Write some PlantUML to see a preview"
+            />
+          }
+        />
       </div>
 
       {/* Status bar */}
-      <div className="flex items-center gap-4 px-3 py-1 border-t text-xs text-muted-foreground bg-background shrink-0">
-        <span>
+      <div className="flex short:hidden items-center gap-4 px-3 py-1 border-t text-xs text-muted-foreground bg-background shrink-0">
+        <span className="hidden sm:inline">
           Ln {cursorPosition.line}, Col {cursorPosition.column}
         </span>
         <span>{lineCount} lines</span>
         {renderTime !== null && (
-          <span>
+          <span className="hidden sm:inline">
             {rendering ? "Rendering..." : `Rendered in ${renderTime}ms`}
           </span>
         )}

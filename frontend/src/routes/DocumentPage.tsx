@@ -9,26 +9,31 @@ import {
   registerPlantUMLLanguage,
 } from "@/lib/plantuml-language";
 import { engineErrorMarkers } from "@/lib/plantuml-language/monaco/authoring";
-import {
-  Panel,
-  Group,
-  Separator,
-} from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DiagramPreview } from "@/components/DiagramPreview";
+import {
+  EditorWorkspace,
+  MOBILE_EDITOR_OPTIONS,
+  MoreIcon,
+  ViewModeToggle,
+  type ViewMode,
+} from "@/components/EditorWorkspace";
+import { useIsMobile } from "@/hooks/useMediaQuery";
 import {
   getDocument,
   updateDocument,
   type DocumentDetail,
 } from "@/lib/documents";
 import { api } from "@/lib/api";
-import { sanitizeSvg } from "@/lib/sanitize";
 import { usePreferencesStore } from "@/stores/preferences";
 import { useAuthStore } from "@/stores/auth";
 import { VersionHistoryPanel } from "@/components/VersionHistoryPanel";
@@ -56,14 +61,13 @@ import {
 
 type RenderError = RenderErrorInfo;
 
-type ViewMode = "split" | "editor" | "preview";
-
 // --- Component ---
 
 export function DocumentPage() {
   const { id: documentId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { preferences, resolvedTheme } = usePreferencesStore();
+  const isMobile = useIsMobile();
   const authUser = useAuthStore((s) => s.user);
 
   // Document state
@@ -113,7 +117,6 @@ export function DocumentPage() {
 
   // Editor state
   const [viewMode, setViewMode] = useState<ViewMode>("split");
-  const [zoom, setZoom] = useState(100);
   const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
   const [lineCount, setLineCount] = useState(1);
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
@@ -344,11 +347,20 @@ export function DocumentPage() {
       () => setShowHistory((prev) => !prev)
     );
 
+    // Hiding the editor (Preview mode) unmounts it; forget the disposed
+    // instance so a reconnect while hidden doesn't try to bind to it.
+    editor.onDidDispose(() => {
+      if (editorRef.current === editor) editorRef.current = null;
+    });
+
     // Bind y-monaco to the editor only if the collaboration session has
     // already synced. If not synced yet, the onSynced callback will create
-    // the binding once Y.Text has content from the server.
+    // the binding once Y.Text has content from the server. On a remount the
+    // old binding belongs to the disposed model (y-monaco tears it down with
+    // the model), so replace it or edits silently stop syncing.
     const session = collabSessionRef.current;
-    if (session && !session.binding && syncedRef.current) {
+    if (session && syncedRef.current && session.binding?.monacoModel !== editor.getModel()) {
+      session.binding?.destroy();
       bindMonacoEditor(session, editor);
     }
   };
@@ -456,30 +468,40 @@ export function DocumentPage() {
         : "bg-red-500";
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)]">
+    <div className="flex flex-col h-[calc(100dvh-3.5rem)] short:h-dvh">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b bg-background shrink-0">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")}>
+      <div className="flex items-center justify-between gap-2 px-2 sm:px-3 py-1.5 border-b bg-background shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+          <Button variant="ghost" size="sm" className="hidden md:inline-flex" onClick={() => navigate("/dashboard")}>
             Projects
           </Button>
-          <span className="text-muted-foreground">/</span>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="md:hidden shrink-0"
+            onClick={() => navigate("/dashboard")}
+            aria-label="Back to projects"
+          >
+            <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </Button>
+          <span className="text-muted-foreground hidden md:inline">/</span>
           {editingTitle ? (
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onBlur={handleTitleSave}
               onKeyDown={(e) => e.key === "Enter" && handleTitleSave()}
-              className="h-7 w-64 text-sm"
+              className="h-7 w-40 sm:w-64 text-sm"
               autoFocus
             />
           ) : (
             <button
-              className={
-                doc.permission === "owner"
-                  ? "text-sm font-medium hover:underline"
-                  : "text-sm font-medium cursor-default"
-              }
+              className={`text-sm font-medium truncate min-w-0 ${
+                doc.permission === "owner" ? "hover:underline" : "cursor-default"
+              }`}
+              title={doc.title}
               // Renaming a document is owner-only per spec §24.
               onClick={() => doc.permission === "owner" && setEditingTitle(true)}
             >
@@ -487,14 +509,14 @@ export function DocumentPage() {
             </button>
           )}
           {isReadOnly && (
-            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded whitespace-nowrap">
               Read Only
             </span>
           )}
 
           {/* Collaborator indicators */}
           {collaborators.length > 0 && (
-            <div className="flex items-center gap-0.5 ml-2">
+            <div className="hidden sm:flex items-center gap-0.5 ml-2">
               {collaborators.slice(0, 5).map((c) => (
                 <Tooltip key={c.clientId}>
                   <TooltipTrigger asChild>
@@ -519,69 +541,74 @@ export function DocumentPage() {
           )}
         </div>
 
-        <div className="flex items-center gap-1">
-          {/* View mode buttons */}
-          <div className="flex border rounded-md">
-            <button
-              className={`px-2 py-1 text-xs ${viewMode === "editor" ? "bg-accent" : ""}`}
-              onClick={() => setViewMode("editor")}
-              title="Editor only"
-            >
-              Code
-            </button>
-            <button
-              className={`px-2 py-1 text-xs border-x ${viewMode === "split" ? "bg-accent" : ""}`}
-              onClick={() => setViewMode("split")}
-              title="Split view"
-            >
-              Split
-            </button>
-            <button
-              className={`px-2 py-1 text-xs ${viewMode === "preview" ? "bg-accent" : ""}`}
-              onClick={() => setViewMode("preview")}
-              title="Preview only"
-            >
-              Preview
-            </button>
+        <div className="flex items-center gap-1 shrink-0">
+          <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
+
+          <div className="hidden md:flex items-center gap-1">
+            {/* Export */}
+            <DropdownMenu>
+              <DropdownMenuTrigger className="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium rounded-md px-3 h-8 hover:bg-accent hover:text-accent-foreground">
+                Export
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleExportSvg} disabled={!svgContent && !lastGoodSvg}>
+                  Download SVG
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportPng}>
+                  Download PNG
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportSource}>
+                  Download Source (.puml)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {doc.permission === "owner" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowShare(true)}
+              >
+                Share
+              </Button>
+            )}
+
+            {!isReadOnly && (
+              <Button
+                variant={showHistory ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setShowHistory((prev) => !prev)}
+              >
+                History
+              </Button>
+            )}
           </div>
 
-          {/* Export */}
+          {/* Phones: the same actions behind one button */}
           <DropdownMenu>
-            <DropdownMenuTrigger className="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium rounded-md px-3 h-8 hover:bg-accent hover:text-accent-foreground">
-              Export
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label="More actions">
+                <MoreIcon />
+              </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="min-w-52">
+              {doc.permission === "owner" && (
+                <DropdownMenuItem onClick={() => setShowShare(true)}>Share</DropdownMenuItem>
+              )}
+              {!isReadOnly && (
+                <DropdownMenuItem onClick={() => setShowHistory((prev) => !prev)}>
+                  Version history
+                </DropdownMenuItem>
+              )}
+              {(doc.permission === "owner" || !isReadOnly) && <DropdownMenuSeparator />}
+              <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Export</DropdownMenuLabel>
               <DropdownMenuItem onClick={handleExportSvg} disabled={!svgContent && !lastGoodSvg}>
                 Download SVG
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportPng}>
-                Download PNG
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportSource}>
-                Download Source (.puml)
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportPng}>Download PNG</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportSource}>Download Source (.puml)</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          {doc.permission === "owner" && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowShare(true)}
-            >
-              Share
-            </Button>
-          )}
-
-          {!isReadOnly && (
-            <Button
-              variant={showHistory ? "secondary" : "ghost"}
-              size="sm"
-              onClick={() => setShowHistory((prev) => !prev)}
-            >
-              History
-            </Button>
-          )}
         </div>
       </div>
 
@@ -589,120 +616,49 @@ export function DocumentPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Editor + Preview */}
         <div className="flex-1 overflow-hidden">
-          <Group orientation="horizontal">
-            {viewMode !== "preview" && (
-              <>
-                <Panel defaultSize={50} minSize={20}>
-                  <div className="relative h-full">
-                    {editorLocked && (
-                      <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 text-xs bg-muted text-muted-foreground border px-3 py-1 rounded-full shadow-sm">
-                        {editorLockLabel}
-                      </div>
-                    )}
-                    <Editor
-                      height="100%"
-                      defaultValue={doc.content}
-                      language="plantuml"
-                      theme={plantumlTheme(resolvedTheme)}
-                      beforeMount={registerPlantUMLLanguage}
-                      onMount={handleEditorMount}
-                      options={{
-                        ...PLANTUML_EDITOR_OPTIONS,
-                        readOnly: editorReadOnly,
-                        minimap: { enabled: preferences.editor_minimap },
-                        fontSize: preferences.editor_font_size,
-                        lineNumbers: "on",
-                        wordWrap: preferences.editor_word_wrap ? "on" : "off",
-                        scrollBeyondLastLine: false,
-                        automaticLayout: true,
-                        tabSize: 2,
-                        renderLineHighlight: "line",
-                        bracketPairColorization: { enabled: true },
-                        padding: { top: 8 },
-                      }}
-                    />
+          <EditorWorkspace
+            viewMode={viewMode}
+            editor={
+              <div className="relative h-full">
+                {editorLocked && (
+                  <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 text-xs bg-muted text-muted-foreground border px-3 py-1 rounded-full shadow-sm whitespace-nowrap">
+                    {editorLockLabel}
                   </div>
-                </Panel>
-                {viewMode === "split" && (
-                  <Separator className="w-1.5 bg-border hover:bg-primary/20 transition-colors" />
                 )}
-              </>
-            )}
-              {viewMode !== "editor" && (
-                <Panel defaultSize={50} minSize={20}>
-                  <div className="h-full flex flex-col bg-muted/30">
-                    {/* Preview toolbar */}
-                    <div className="flex items-center gap-1 px-2 py-1 border-b text-xs">
-                      <button
-                        className="px-2 py-0.5 rounded hover:bg-accent"
-                        onClick={() => setZoom((z) => Math.min(z + 25, 400))}
-                      >
-                        +
-                      </button>
-                      <span className="min-w-[3rem] text-center">{zoom}%</span>
-                      <button
-                        className="px-2 py-0.5 rounded hover:bg-accent"
-                        onClick={() => setZoom((z) => Math.max(z - 25, 25))}
-                      >
-                        -
-                      </button>
-                      <button
-                        className="px-2 py-0.5 rounded hover:bg-accent ml-1"
-                        onClick={() => setZoom(100)}
-                      >
-                        Reset
-                      </button>
-                      {rendering && (
-                        <span className="ml-auto text-muted-foreground">Rendering...</span>
-                      )}
-                    </div>
-
-                    {/* Preview content */}
-                    <div className="flex-1 overflow-auto p-4">
-                      {renderError && !lastGoodSvg ? (
-                        <div className="flex items-center justify-center h-full">
-                          <div className="text-center text-muted-foreground">
-                            <p className="text-sm font-medium text-destructive mb-1">
-                              {renderError.message}
-                            </p>
-                            {renderError.line && (
-                              <p className="text-xs">Error on line {renderError.line}</p>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="relative min-h-full">
-                          {renderError && lastGoodSvg && (
-                            <div className="absolute top-2 left-2 right-2 z-10 bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2 text-xs">
-                              <span className="text-destructive font-medium">
-                                {renderError.message}
-                              </span>
-                              {renderError.line && (
-                                <span className="text-muted-foreground ml-2">
-                                  Line {renderError.line}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                          <div
-                            className={`inline-block transition-opacity ${renderError ? "opacity-40" : ""}`}
-                            style={{ transform: `scale(${zoom / 100})`, transformOrigin: "top left" }}
-                            dangerouslySetInnerHTML={{
-                              __html: sanitizeSvg(svgContent || lastGoodSvg || ""),
-                            }}
-                          />
-                          {!svgContent && !lastGoodSvg && !rendering && (
-                            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                              Write some PlantUML to see a preview
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </Panel>
-              )}
-          </Group>
+                <Editor
+                  height="100%"
+                  defaultValue={doc.content}
+                  language="plantuml"
+                  theme={plantumlTheme(resolvedTheme)}
+                  beforeMount={registerPlantUMLLanguage}
+                  onMount={handleEditorMount}
+                  options={{
+                    ...PLANTUML_EDITOR_OPTIONS,
+                    readOnly: editorReadOnly,
+                    minimap: { enabled: preferences.editor_minimap && !isMobile },
+                    fontSize: preferences.editor_font_size,
+                    lineNumbers: "on",
+                    wordWrap: preferences.editor_word_wrap ? "on" : "off",
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true,
+                    tabSize: 2,
+                    renderLineHighlight: "line",
+                    bracketPairColorization: { enabled: true },
+                    padding: { top: 8 },
+                    ...(isMobile ? MOBILE_EDITOR_OPTIONS : {}),
+                  }}
+                />
+              </div>
+            }
+            preview={
+              <DiagramPreview
+                svg={svgContent || lastGoodSvg}
+                error={renderError}
+                rendering={rendering}
+                placeholder="Write some PlantUML to see a preview"
+              />
+            }
+          />
         </div>
 
         {/* Version History Panel */}
@@ -731,13 +687,13 @@ export function DocumentPage() {
       />
 
       {/* Status bar */}
-      <div className="flex items-center gap-4 px-3 py-1 border-t text-xs text-muted-foreground bg-background shrink-0">
-        <span>
+      <div className="flex short:hidden items-center gap-4 px-3 py-1 border-t text-xs text-muted-foreground bg-background shrink-0">
+        <span className="hidden sm:inline">
           Ln {cursorPosition.line}, Col {cursorPosition.column}
         </span>
         <span>{lineCount} lines</span>
         {renderTime !== null && (
-          <span>{rendering ? "Rendering..." : `Rendered in ${renderTime}ms`}</span>
+          <span className="hidden sm:inline">{rendering ? "Rendering..." : `Rendered in ${renderTime}ms`}</span>
         )}
         <div className="flex items-center gap-1.5 ml-auto">
           <span

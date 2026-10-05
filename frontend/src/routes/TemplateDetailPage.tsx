@@ -62,7 +62,7 @@ export function TemplateDetailPage() {
   };
 
   return (
-    <div className="p-6 overflow-y-auto h-[calc(100vh-3.5rem)]">
+    <div className="p-4 sm:p-6 overflow-y-auto h-[calc(100dvh-3.5rem)]">
       <div className="max-w-3xl mx-auto">
         <nav className="text-sm text-muted-foreground mb-4">
           <Link to="/templates" className="hover:underline">
@@ -72,7 +72,7 @@ export function TemplateDetailPage() {
         </nav>
 
         <div className="flex items-start justify-between gap-3 mb-2">
-          <h1 className="text-2xl font-bold">
+          <h1 className="text-xl sm:text-2xl font-bold">
             {template.name} PlantUML Template
           </h1>
           <Badge variant="secondary" className="shrink-0 capitalize mt-1.5">
@@ -101,9 +101,9 @@ export function TemplateDetailPage() {
           </pre>
         </div>
 
-        <div className="flex items-center gap-2 border-t pt-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-2 border-t pt-4">
           {user && (
-            <div className="flex items-center gap-2 mr-auto">
+            <div className="flex items-center gap-2 sm:mr-auto">
               <label className="text-sm text-muted-foreground">
                 Create in:
               </label>

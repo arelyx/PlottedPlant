@@ -118,9 +118,27 @@ export function TemplateBrowserPage() {
   );
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)]">
-      {/* Sidebar */}
-      <aside className="w-48 border-r p-3 space-y-1 overflow-y-auto shrink-0">
+    <div className="flex flex-col md:flex-row h-[calc(100dvh-3.5rem)]">
+      {/* Type filter: a scrolling chip row on phones, a sidebar from md up */}
+      <nav
+        className="md:hidden flex gap-2 overflow-x-auto border-b px-4 py-2 shrink-0 [scrollbar-width:none]"
+        aria-label="Diagram type"
+      >
+        {DIAGRAM_TYPES.map((dt) => (
+          <button
+            key={dt.value}
+            className={`shrink-0 rounded-full border px-3 py-1.5 text-sm whitespace-nowrap ${
+              activeType === dt.value
+                ? "bg-primary text-primary-foreground border-primary"
+                : "text-muted-foreground"
+            }`}
+            onClick={() => setActiveType(dt.value)}
+          >
+            {dt.label}
+          </button>
+        ))}
+      </nav>
+      <aside className="hidden md:block w-48 border-r p-3 space-y-1 overflow-y-auto shrink-0">
         <p className="text-xs font-medium text-muted-foreground mb-2">
           Diagram Type
         </p>
@@ -140,9 +158,9 @@ export function TemplateBrowserPage() {
       </aside>
 
       {/* Main grid */}
-      <div className="flex-1 p-6 overflow-y-auto">
+      <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
         <div className="max-w-5xl mx-auto">
-          <h1 className="text-2xl font-bold mb-6">Template Library</h1>
+          <h1 className="text-2xl font-bold mb-4 sm:mb-6">Template Library</h1>
 
           {loading ? (
             <p className="text-center text-muted-foreground py-12">
@@ -195,7 +213,7 @@ export function TemplateBrowserPage() {
         onOpenChange={() => setPreviewTemplate(null)}
       >
         {previewTemplate && (
-          <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+          <DialogContent className="sm:max-w-3xl max-h-[85dvh] flex flex-col">
             <DialogHeader>
               <DialogTitle>{previewTemplate.name}</DialogTitle>
               <p className="text-sm text-muted-foreground">
@@ -216,9 +234,9 @@ export function TemplateBrowserPage() {
                 </pre>
               </div>
             </div>
-            <DialogFooter className="flex items-center gap-2">
+            <DialogFooter className="flex flex-col-reverse sm:flex-row sm:items-center gap-2">
               {user && (
-                <div className="flex items-center gap-2 mr-auto">
+                <div className="flex items-center gap-2 sm:mr-auto">
                   <label className="text-sm text-muted-foreground">
                     Create in:
                   </label>

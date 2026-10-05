@@ -7,22 +7,21 @@ import {
   plantumlTheme,
   registerPlantUMLLanguage,
 } from "@/lib/plantuml-language";
-import {
-  Panel,
-  Group,
-  Separator,
-} from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DiagramPreview } from "@/components/DiagramPreview";
+import { EditorWorkspace, MOBILE_EDITOR_OPTIONS, MoreIcon } from "@/components/EditorWorkspace";
+import { useIsMobile } from "@/hooks/useMediaQuery";
 import { accessPublicLink, duplicatePublicLink, type PublicDocumentAccess } from "@/lib/shares";
 import { api } from "@/lib/api";
-import { sanitizeSvg } from "@/lib/sanitize";
 import { usePreferencesStore } from "@/stores/preferences";
 import { useAuthStore } from "@/stores/auth";
 
@@ -46,6 +45,7 @@ export function SharedDocumentPage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const { resolvedTheme, preferences, isLoaded, load } = usePreferencesStore();
+  const isMobile = useIsMobile();
   const { user, isInitialized, initialize } = useAuthStore();
 
   // Attempt to restore auth session from refresh token cookie
@@ -74,7 +74,6 @@ export function SharedDocumentPage() {
   // Render state
   const [svgContent, setSvgContent] = useState<string | null>(null);
   const [rendering, setRendering] = useState(false);
-  const [zoom, setZoom] = useState(100);
   const renderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load document
@@ -180,29 +179,31 @@ export function SharedDocumentPage() {
   const isReadOnly = true; // Public links are always viewer-only
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-dvh">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b bg-background shrink-0">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-2 px-2 sm:px-4 py-2 border-b bg-background shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
-            className="text-sm font-bold hover:opacity-80"
+            className="text-sm font-bold hover:opacity-80 shrink-0"
             onClick={() => navigate(user ? "/dashboard" : "/")}
           >
             PlottedPlant
           </button>
           <span className="text-muted-foreground">/</span>
-          <span className="text-sm font-medium">{data.document.title}</span>
-          <Badge variant="secondary" className="text-xs">
+          <span className="text-sm font-medium truncate min-w-0" title={data.document.title}>
+            {data.document.title}
+          </span>
+          <Badge variant="secondary" className="text-xs shrink-0">
             View only
           </Badge>
-          <span className="text-xs text-muted-foreground">
+          <span className="hidden lg:inline text-xs text-muted-foreground whitespace-nowrap">
             Shared by {data.document.owner.display_name}
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           <DropdownMenu>
-            <DropdownMenuTrigger className="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium rounded-md px-3 h-8 hover:bg-accent hover:text-accent-foreground">
+            <DropdownMenuTrigger className="hidden md:inline-flex items-center justify-center whitespace-nowrap text-sm font-medium rounded-md px-3 h-8 hover:bg-accent hover:text-accent-foreground">
               Export
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -225,6 +226,26 @@ export function SharedDocumentPage() {
           >
             {duplicating ? "Duplicating…" : "Duplicate"}
           </Button>
+
+          {/* Phones: export and details behind one button */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label="More actions">
+                <MoreIcon />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-52">
+              <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                Shared by {data.document.owner.display_name}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleExportSvg} disabled={!svgContent}>
+                Download SVG
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportPng}>Download PNG</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportSource}>Download Source (.puml)</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
       {duplicateError && (
@@ -235,8 +256,9 @@ export function SharedDocumentPage() {
 
       {/* Editor + Preview */}
       <div className="flex-1 overflow-hidden">
-        <Group orientation="horizontal">
-          <Panel defaultSize={50} minSize={20}>
+        <EditorWorkspace
+          viewMode="split"
+          editor={
             <Editor
               height="100%"
               language="plantuml"
@@ -259,57 +281,18 @@ export function SharedDocumentPage() {
                 scrollBeyondLastLine: false,
                 automaticLayout: true,
                 padding: { top: 8 },
+                ...(isMobile ? MOBILE_EDITOR_OPTIONS : {}),
               }}
             />
-          </Panel>
-          <Separator className="w-1.5 bg-border hover:bg-primary/20 transition-colors" />
-          <Panel defaultSize={50} minSize={20}>
-            <div className="h-full flex flex-col bg-muted/30">
-              <div className="flex items-center gap-1 px-2 py-1 border-b text-xs">
-                <button
-                  className="px-2 py-0.5 rounded hover:bg-accent"
-                  onClick={() => setZoom((z) => Math.min(z + 25, 400))}
-                >
-                  +
-                </button>
-                <span className="min-w-[3rem] text-center">{zoom}%</span>
-                <button
-                  className="px-2 py-0.5 rounded hover:bg-accent"
-                  onClick={() => setZoom((z) => Math.max(z - 25, 25))}
-                >
-                  -
-                </button>
-                <button
-                  className="px-2 py-0.5 rounded hover:bg-accent ml-1"
-                  onClick={() => setZoom(100)}
-                >
-                  Reset
-                </button>
-                {rendering && (
-                  <span className="ml-auto text-muted-foreground">
-                    Rendering...
-                  </span>
-                )}
-              </div>
-              <div className="flex-1 overflow-auto p-4">
-                {svgContent ? (
-                  <div
-                    className="inline-block"
-                    style={{
-                      transform: `scale(${zoom / 100})`,
-                      transformOrigin: "top left",
-                    }}
-                    dangerouslySetInnerHTML={{ __html: sanitizeSvg(svgContent) }}
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                    {rendering ? "Rendering..." : "No preview available"}
-                  </div>
-                )}
-              </div>
-            </div>
-          </Panel>
-        </Group>
+          }
+          preview={
+            <DiagramPreview
+              svg={svgContent}
+              rendering={rendering}
+              placeholder={rendering ? "Rendering..." : "No preview available"}
+            />
+          }
+        />
       </div>
     </div>
   );
