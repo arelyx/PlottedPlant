@@ -1,0 +1,59 @@
+@startuml
+' Preprocessor-heavy: variables, functions, procedures, conditionals, loops
+!$env = "prod"
+!$replicas = 3
+!$palette = { "ok": "#2ECC71", "bad": "#E74C3C" }
+!define TABLE(name) database name <<table>>
+!define PK(x) <b>x</b>
+!definelong LINK(a, b, label)
+a --> b : label
+!enddefinelong
+
+!function $colour($status)
+  !if ($status == "ok")
+    !return "#2ECC71"
+  !else
+    !return "#E74C3C"
+  !endif
+!endfunction
+
+!procedure $service($alias, $label="service", $status="ok")
+  rectangle "$label" as $alias $colour($status)
+!endprocedure
+
+!procedure $fleet($prefix, $count)
+  !$i = 1
+  !while $i <= $count
+    $service($prefix + $i, "node " + $i)
+    !$i = $i + 1
+  !endwhile
+!endprocedure
+
+!ifdef UNDEFINED_FLAG
+  title never shown
+!else
+  title Deployment (%upper($env)), %strlen($env) chars
+!endif
+
+$service("api", "Public API")
+$service("db", $status="bad", $label="Database")
+$fleet("worker", $replicas)
+LINK(api, db, reads)
+TABLE(audit)
+note bottom of audit : key is PK(id)
+
+!unquoted procedure $queue($name)
+  queue $name
+!endprocedure
+$queue(jobs)
+
+!foreach $n in ["worker1", "worker2", "worker3"]
+  api --> $n : dispatch
+!endfor
+
+!if %variable_exists("$env") && %not(%false())
+  note right of api : env = $env, built %date("yyyy-MM-dd")
+!endif
+!log done with $replicas replicas
+!assert %strlen($env) > 0 : "env must be set"
+@enduml

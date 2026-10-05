@@ -1,0 +1,32 @@
+@startuml
+state Active {
+  state "Editing" as Edit {
+    [*] --> Typing
+    Typing --> Saving : save
+    Saving --> Typing : done
+    --
+    [*] --> Online
+    Online --> Offline : drop
+  }
+  state Review
+  Edit --> Review : submit
+  note right of Review
+    Reviewers:
+    * one
+    * two
+  end note
+}
+state choice <<choice>>
+[*] --> Active
+Active --> choice
+choice --> [*] : accepted
+choice --> Active : rejected
+
+json Settings {
+  "theme": "dark",
+  "panes": [
+    {"id": 1},
+    {"id": 2}
+  ]
+}
+@enduml

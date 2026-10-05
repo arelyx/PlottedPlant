@@ -1,0 +1,25 @@
+@startuml
+node "Load Balancer" as lb {
+    [Nginx]
+}
+
+node "App Server 1" as app1 {
+    [FastAPI]
+    [Uvicorn]
+}
+
+node "App Server 2" as app2 {
+    [FastAPI] as api2
+    [Uvicorn] as uv2
+}
+
+node "Database Server" as dbsrv {
+    database "PostgreSQL" as db
+    database "Redis" as redis
+}
+
+lb --> app1 : HTTP
+lb --> app2 : HTTP
+app1 --> dbsrv
+app2 --> dbsrv
+@enduml

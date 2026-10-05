@@ -1,0 +1,31 @@
+@startuml
+robust "Web Browser" as WB
+concise "Web User" as WU
+clock "Clock" as clk with period 100
+binary "Enable" as EN
+analog "Load" between 0 and 10 as LD
+
+@0
+WU is Idle
+WB is Idle
+EN is low
+LD is 0
+
+@100
+WU -> WB : URL
+WU is Waiting #LightCyan
+WB is Processing
+EN is high
+LD is 7.5
+
+@300
+WB is Waiting
+LD is 2
+
+@WU
+0 is Idle
++250 is Done
+
+@100 <-> @300 : {200 ms} round trip
+highlight 100 to 300 #Gold;line:DimGrey : busy
+@enduml

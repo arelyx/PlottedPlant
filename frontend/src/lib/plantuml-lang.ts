@@ -1,81 +1,84 @@
-import { StreamLanguage, StringStream } from "@codemirror/language";
+import { StreamLanguage, type StringStream } from "@codemirror/language";
+import { vocab } from "./plantuml-language/vocab";
 
 /**
- * PlantUML syntax highlighting for CodeMirror 6.
- * Mirrors the Monaco Monarch tokenizer used in DocumentPage.tsx.
+ * PlantUML syntax highlighting for CodeMirror 6, used by the read-only version
+ * diff and preview dialogs. A deliberately small stream tokenizer: the full
+ * grammar is the Monarch one in plantuml-language/monaco. Word lists come from
+ * the same PlantUML vocabulary.
  */
+interface State {
+  /** Inside a multi-line block comment. */
+  blockComment: boolean;
+  /** After the `:` of a message or label: the rest of the line is prose. */
+  text: boolean;
+}
+
+const TYPES = new Set(vocab.types);
+const KEYWORDS = new Set(vocab.keywords.filter((word) => !word.includes(" ") && !TYPES.has(word)));
+const TAGS = new RegExp(`^@(?:start|end)(?:${vocab.startTags.join("|")})\\b`);
+
+const ARROW =
+  /^(?:<\|?|[*#+^]|[ox](?=[-.])|\}[o|]?|\|[o|])?(?:-+|\.{2,}|={2,}|~{2,})(?:\[[^\]]*\][-.=~]*)?(?:\|?>>?|[o|]\{|\|\||[*#+^]|[ox](?!\w))?/;
+
+function blockComment(stream: StringStream, state: State): string {
+  if (stream.skipTo("'/")) {
+    stream.match("'/");
+    state.blockComment = false;
+  } else {
+    stream.skipToEnd();
+    state.blockComment = true;
+  }
+  return "comment";
+}
+
 const plantumlStreamParser = {
-  token(stream: StringStream): string | null {
-    // Skip whitespace
+  startState: (): State => ({ blockComment: false, text: false }),
+
+  token(stream: StringStream, state: State): string | null {
+    if (stream.sol()) state.text = false;
+    if (state.blockComment) return blockComment(stream, state);
+
+    const lineStart = stream.string.slice(0, stream.pos).trim() === "";
     if (stream.eatSpace()) return null;
 
-    // Comments: ' single-line or /' block-start
-    if (stream.match("/'")) {
+    if (stream.match("/'")) return blockComment(stream, state);
+    // A quote only starts a comment at the beginning of a line ("it's" is text).
+    if (lineStart && stream.peek() === "'") {
       stream.skipToEnd();
       return "comment";
     }
-    if (stream.match("'")) {
-      stream.skipToEnd();
-      return "comment";
+    if (lineStart && stream.match(TAGS)) return "keyword";
+    if (lineStart && stream.match(/^!\w*/)) return "meta";
+
+    if (state.text) {
+      stream.match(/^[^\s]+/);
+      return null;
     }
 
-    // Strings: "..."
-    if (stream.match(/"[^"]*"/)) return "string";
+    if (stream.match(/^"[^"]*"?/)) return "string";
+    if (stream.match(/^#\w+/)) return "number";
+    if (stream.match(/^\$\w+|^%\w+(?=\()/)) return "meta";
 
-    // Color literals: #AABBCC or #colorName
-    if (stream.match(/#[a-fA-F0-9]{6}\b/)) return "number";
-    if (stream.match(/#\w+/)) return "number";
+    // Arrows: -->, <|--, ..>, -[#red]->, o--, *--, }o--||
+    if (stream.match(ARROW)) return "operator";
 
-    // Preprocessor directives: !include, !define, etc.
-    if (stream.match(/![a-z]+/)) return "meta";
-
-    // Arrows: -->, <--, ..>, <.., ~~>, etc.
-    if (stream.match(/-+[>|*ox]+/) || stream.match(/<[>|*ox]?-+/)) return "operator";
-    if (stream.match(/\.+[>|*ox]+/) || stream.match(/<[>|*ox]?\.+/)) return "operator";
-    if (stream.match(/~+[>|*ox]+/)) return "operator";
-
-    // @directives: @startuml, @enduml, etc.
-    if (stream.match(/@(startuml|enduml|startmindmap|endmindmap|startsalt|endsalt|startgantt|endgantt|startjson|endjson|startyaml|endyaml)\b/)) {
-      return "keyword";
+    if (stream.match(/^::/)) return null;
+    if (stream.match(":")) {
+      state.text = true;
+      return null;
     }
 
-    // Words — check against keyword lists
-    if (stream.match(/[a-zA-Z_]\w*/)) {
+    if (stream.match(/^[A-Za-z_]\w*/)) {
       const word = stream.current();
+      if (TYPES.has(word)) return "typeName";
       if (KEYWORDS.has(word)) return "keyword";
       return null;
     }
 
-    // Advance past any unmatched character
     stream.next();
     return null;
   },
 };
-
-const KEYWORDS = new Set([
-  // Diagram elements
-  "participant", "actor", "boundary", "control", "entity", "database", "collections", "queue",
-  // Control flow
-  "as", "order", "of", "on", "is", "if", "else", "elseif", "endif",
-  "while", "endwhile", "repeat", "backward", "end", "fork", "again",
-  "kill", "return", "stop", "start", "detach",
-  // Annotations
-  "note", "rnote", "hnote", "ref", "over", "legend", "header", "footer",
-  "title", "caption", "newpage",
-  // OOP / structure
-  "class", "interface", "enum", "abstract", "annotation", "package",
-  "namespace", "together", "set", "show", "hide", "remove", "skinparam",
-  "style", "sprite",
-  // Positioning
-  "left", "right", "up", "down", "top", "bottom", "center",
-  // Lifecycle
-  "activate", "deactivate", "create", "destroy", "autonumber",
-  // Containers
-  "state", "partition", "rectangle", "node", "folder", "frame", "cloud",
-  "component", "usecase", "artifact", "storage", "file", "card",
-  "hexagon", "diamond", "circle", "label",
-  // Grouping
-  "group", "box", "loop", "alt", "opt", "break", "par", "critical", "section",
-]);
 
 export const plantumlLanguage = StreamLanguage.define(plantumlStreamParser);

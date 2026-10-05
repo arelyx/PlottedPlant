@@ -1,0 +1,4 @@
+@startuml
+circle Hub
+Hub -- Spoke
+@enduml

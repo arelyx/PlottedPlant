@@ -1,0 +1,5 @@
+@startuml
+participant Alice
+actor Bob
+Alice -> Bob
+@enduml

@@ -1,0 +1,15 @@
+@startuml
+' Participants whose names are also PlantUML keywords
+participant order
+participant state
+participant "note" as memo
+order -> state : start
+state --> order : end
+database -> queue : enqueue
+queue --> database : ack
+actor -> order : class of 2026
+order -> memo : title case
+loop 2 times
+  state -> state : repeat
+end
+@enduml

@@ -1,0 +1,7 @@
+@startdot
+digraph foo {
+  node [style=rounded]
+  node1 [shape=box]
+  node1 -> node2
+}
+@enddot

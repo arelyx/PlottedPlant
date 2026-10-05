@@ -1,0 +1,5 @@
+@startuml
+actor User
+database DB
+User -> DB : query
+@enduml

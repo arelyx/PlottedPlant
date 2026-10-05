@@ -1,0 +1,23 @@
+@startuml
+[*] --> Idle
+state "Processing Order" as Processing {
+  [*] --> Validating
+  Validating --> Charging : ok
+  state Charging {
+    [*] --> Pending
+    Pending --> Captured
+  }
+  Charging --> [*]
+}
+state Choice <<choice>>
+state fork1 <<fork>>
+Idle --> Processing : submit
+Processing --> Choice
+Choice --> Done : [paid]
+Choice --> Failed : [declined]
+Idle : waiting for input
+Done --> [*]
+Failed --> [*]
+note right of Idle : Idle --> Processing in a note
+state Done #LightGreen
+@enduml

@@ -14,6 +14,7 @@
 //   error so the UI can keep the last good diagram visible.
 
 import { api } from "./api";
+import { describeEngineError } from "./plantuml-language/core/engine-error";
 
 export interface RenderErrorInfo {
   message: string;
@@ -126,7 +127,21 @@ function detectErrorIn(doc: Document): RenderErrorInfo | null {
   );
   if (!red) return null;
 
-  return { message: (red.textContent ?? "").trim() || "Syntax error", line };
+  return { message: describeEngineError((red.textContent ?? "").trim() || "Syntax error"), line };
+}
+
+/**
+ * Normalize the error payload of a 422 from /render/svg. The API passes
+ * through PlantUML's X-PlantUML-Diagram-Error-Line header, which counts
+ * lines from 0; RenderErrorInfo.line is 1-based like the in-browser engine's.
+ */
+function fromServerError(payload: unknown): RenderErrorInfo {
+  const error = (payload ?? {}) as { message?: unknown; line?: unknown };
+  const info: RenderErrorInfo = {
+    message: describeEngineError(typeof error.message === "string" && error.message ? error.message : "Syntax error"),
+  };
+  if (typeof error.line === "number" && Number.isInteger(error.line) && error.line >= 0) info.line = error.line + 1;
+  return info;
 }
 
 /**
@@ -222,10 +237,7 @@ async function renderOnServer(source: string): Promise<PreviewRenderResult> {
 
     if (response.status === 422) {
       const data = await response.json();
-      return {
-        error: data.detail?.error || data.error || { message: "Syntax error" },
-        engine: "server",
-      };
+      return { error: fromServerError(data.detail?.error ?? data.error), engine: "server" };
     }
 
     if (!response.ok) throw new Error("Render failed");

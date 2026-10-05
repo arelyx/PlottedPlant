@@ -1,0 +1,29 @@
+@startchen
+left to right direction
+entity STUDENT {
+  Number <<key>>
+  Name {
+    First
+    Last
+  }
+  Born : DATE
+  Age <<derived>>
+  Email <<multi>>
+}
+entity COURSE {
+  Code <<key>>
+  Title
+}
+entity SECTION <<weak>> {
+  "Section no." as No <<key>>
+}
+relationship ENROLS {
+  Grade
+}
+relationship HAS <<identifying>> {
+}
+ENROLS -N- STUDENT
+ENROLS -M- COURSE
+HAS -1- COURSE
+HAS =N= SECTION
+@endchen

@@ -1,0 +1,19 @@
+@startyaml
+#highlight "service" / "ports"
+service:
+  name: order-api
+  replicas: 3
+  enabled: true
+  image: "registry.example.com/order-api:1.4.2"
+  ports:
+    - 8080
+    - 8443
+  env:
+    LOG_LEVEL: info
+    RELEASED: 2026-01-09
+owners:
+  - name: Dana
+    team: payments
+  - name: Eli
+    team: platform
+@endyaml

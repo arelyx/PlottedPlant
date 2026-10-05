@@ -1,0 +1,19 @@
+@startgantt
+project starts 2026-01-05
+saturday are closed
+sunday are closed
+printscale weekly
+[Design phase] as [D] lasts 10 days
+[Build] as [B] lasts 15 days
+[B] starts at [D]'s end
+[Test] lasts 5 days
+[Test] starts after [B]'s end
+[Release] happens at [Test]'s end
+[D] is colored in Lavender/LightBlue
+[Docs] on {Alice} lasts 4 days
+then [Review] on {Bob:50%} lasts 2 days
+-- Phase two --
+[B] is 40% completed
+[B] -> [Test]
+{Alice} is off on 2026-01-12
+@endgantt

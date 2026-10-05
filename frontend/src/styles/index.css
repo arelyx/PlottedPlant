@@ -137,3 +137,9 @@
   bottom: 100%;
   left: -2px;
 }
+
+/* Monaco sizes its quick-fix menu from content-box row widths; Tailwind's
+   global border-box makes the rows too narrow and clips the labels. */
+.action-widget .monaco-list-row {
+  box-sizing: content-box;
+}

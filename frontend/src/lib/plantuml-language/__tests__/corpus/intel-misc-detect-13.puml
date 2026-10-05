@@ -1,0 +1,4 @@
+@startuml
+state Active
+Active : entry / start
+@enduml

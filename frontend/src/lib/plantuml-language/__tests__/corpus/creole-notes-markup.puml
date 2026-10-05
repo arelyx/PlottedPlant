@@ -1,0 +1,35 @@
+@startuml
+' Creole markup in every place text can go
+title
+  = Release notes
+  Version **4.2** for //everyone//
+end title
+caption Figure 1: <i>markup</i> sampler
+legend right
+  |= Markup |= Result |
+  | ""**bold**"" | **bold** |
+  | ""//italic//"" | //italic// |
+  | ""--struck--"" | --struck-- |
+endlegend
+participant Alice
+participant Bob
+Alice -> Bob : **bold** //italic// ""mono"" --struck-- __under__ ~~wave~~
+Bob --> Alice : <b>b</b> <i>i</i> <u>u</u> <s>s</s> <color:red>red</color> <size:18>big</size>
+Alice -> Bob : <back:yellow>marked</back> <font:courier>mono</font> H<sub>2</sub>O x<sup>2</sup>
+Bob --> Alice : icons <&check> <&warning*2> emoji <:smile:> <:1f600:> <#green:sunny:>
+Alice -> Bob : link [[https://plantuml.com]] and [[https://plantuml.com{tooltip} label]]
+Bob --> Alice : line one\nline two\ttabbed <U+2713> &#169;
+note over Alice, Bob
+  = Heading
+  == Sub-heading
+  * item one
+  ** nested //item//
+  # numbered
+  ----
+  <code>
+  code --> stays <b>literal</b>
+  </code>
+  Dates like 2026-01-01 and arrows like A -> B are plain text.
+  A price of $5 is not a variable.
+end note
+@enduml

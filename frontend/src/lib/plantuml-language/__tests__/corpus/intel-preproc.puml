@@ -1,0 +1,30 @@
+@startuml
+!$primary = "#LightBlue"
+!$count = 3
+!define SIMPLE_MACRO(x) participant x
+!definelong LONG_MACRO(a, b)
+a -> b : hello
+!enddefinelong
+!procedure $send($from, $to, $label="ping")
+  $from -> $to : $label
+!endprocedure
+!function $double($x)
+  !local $tmp = $x * 2
+  !return $tmp
+!endfunction
+!unquoted procedure $box($name)
+  participant $name
+!endprocedure
+SIMPLE_MACRO(Alice)
+$box(Bob)
+$send(Alice, Bob)
+$send(Bob, Alice, "pong")
+LONG_MACRO(Alice, Bob)
+Alice -> Bob : $double($count) items in $primary
+!if (%strlen("x") == 1)
+note over Alice : %upper("shout")
+!endif
+!foreach $i in [1, 2]
+Alice -> Bob : round $i
+!endfor
+@enduml

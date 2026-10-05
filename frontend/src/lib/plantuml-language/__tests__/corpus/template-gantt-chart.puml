@@ -1,0 +1,13 @@
+@startgantt
+Project starts 2026-01-01
+[Design] lasts 10 days
+[Backend Development] lasts 15 days
+[Backend Development] starts at [Design]'s end
+[Frontend Development] lasts 15 days
+[Frontend Development] starts at [Design]'s end
+[Integration Testing] lasts 5 days
+[Integration Testing] starts at [Backend Development]'s end
+[Integration Testing] starts at [Frontend Development]'s end
+[Deployment] lasts 3 days
+[Deployment] starts at [Integration Testing]'s end
+@endgantt

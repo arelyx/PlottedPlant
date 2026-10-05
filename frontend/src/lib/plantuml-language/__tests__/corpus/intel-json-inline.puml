@@ -1,0 +1,8 @@
+@startuml
+class Holder
+json Settings {
+  "theme": "dark",
+  "size": 12
+}
+Holder --> Settings
+@enduml

@@ -1,0 +1,24 @@
+@startuml
+left to right direction
+actor Customer
+actor "Bank Clerk" as Clerk
+:Admin User: as Admin
+actor/ Auditor
+rectangle Bank {
+  usecase "Open Account" as UC1
+  usecase UC2 as "Close
+  Account"
+  (Deposit Money) as UC3
+  (Withdraw)
+  usecase/ Audit
+}
+Customer --> UC1
+Customer --> UC3
+Customer --> (Withdraw)
+Clerk --> UC2
+Admin --> UC1 : approves
+:Admin User: --> (Withdraw)
+Auditor --> Audit
+UC1 .> UC3 : <<include>>
+note right of UC1 : Customer --> UC1 again
+@enduml

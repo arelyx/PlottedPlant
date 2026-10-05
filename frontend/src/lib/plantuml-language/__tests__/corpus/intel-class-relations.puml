@@ -1,0 +1,19 @@
+@startuml
+class A
+class B
+class C
+A <|-- B
+A *-- C
+B o-- C
+A ..> C
+A ..|> B
+A "1" --> "many" B : contains >
+A -left-> C
+A -[hidden]-> B
+B #-- C
+C x-- A
+A }-- B
+C +-- A
+A ^-- C
+(A, B) .. C
+@enduml

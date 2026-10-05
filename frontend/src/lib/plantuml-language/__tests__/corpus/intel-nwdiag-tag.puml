@@ -1,0 +1,8 @@
+@startnwdiag
+nwdiag {
+  network office {
+    pc1;
+    printer [shape = database];
+  }
+}
+@endnwdiag

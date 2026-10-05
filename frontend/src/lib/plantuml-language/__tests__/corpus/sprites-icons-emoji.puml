@@ -1,0 +1,20 @@
+@startuml
+sprite $server [16x16/16] {
+FFFFFFFFFFFFFFFF
+F0000000000000F0
+F0FFFFFFFFFF00F0
+F0000000000000F0
+F0FFFFFFFFFF00F0
+F0000000000000F0
+FFFFFFFFFFFFFFFF
+}
+sprite $dot <svg viewBox="0 0 16 16">
+<circle cx="8" cy="8" r="6" fill="#1A73E8"/>
+</svg>
+rectangle "<$server> Edge node" as edge
+rectangle "<$dot> Status" as status
+rectangle "<&cloud> Cloud <&cloud-download>" as cloudbox
+rectangle "<:rocket:> Launch <:white_check_mark:>" as launch
+edge --> status : <&pulse> health
+cloudbox --> launch : <$server{scale=0.5}> deploy
+@enduml

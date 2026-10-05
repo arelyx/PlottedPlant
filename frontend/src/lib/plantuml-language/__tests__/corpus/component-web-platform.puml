@@ -1,0 +1,36 @@
+@startuml
+skinparam componentStyle uml2
+package "Front end" {
+  [Web App] as Web
+  [Mobile App] <<native>>
+  () "REST" as Rest
+  interface "GraphQL" as Gql
+}
+node "Kubernetes" as K8s #AliceBlue {
+  component "API Gateway" as Gateway {
+    portin https
+    portout upstream
+  }
+  component [Order Service] as Orders
+  [Payment Service] ..> [Fraud Check] : calls
+  queue "Event Bus" as Bus
+}
+database "PostgreSQL" as Pg {
+  folder "schemas" {
+    [orders]
+    [payments]
+  }
+}
+cloud "CDN"
+Web --> Rest
+[Mobile App] --> Gql
+Rest - Gateway
+Gql -- Gateway
+Gateway --> Orders : route
+Orders -(0- [Payment Service]
+Orders ..> Bus : publish
+Orders --> Pg
+Web -left-> CDN : assets
+Gateway -[#green,bold]-> [Payment Service]
+note bottom of Bus : at-least-once delivery
+@enduml

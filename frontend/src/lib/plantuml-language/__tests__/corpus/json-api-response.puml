@@ -1,0 +1,15 @@
+@startjson
+#highlight "data" / "items" / "0" / "price"
+#highlight "meta"
+{
+  "data": {
+    "items": [
+      { "sku": "A-100", "price": 19.99, "tags": ["new", "sale"] },
+      { "sku": "B-200", "price": -4.5e2, "tags": [] }
+    ],
+    "total": 2,
+    "created": "2026-01-09T10:15:00Z"
+  },
+  "meta": { "ok": true, "next": null, "note": "a \"quoted\" word" }
+}
+@endjson

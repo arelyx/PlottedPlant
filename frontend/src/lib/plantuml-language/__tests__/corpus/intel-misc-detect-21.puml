@@ -1,0 +1,6 @@
+@startuml
+(First usecase)
+(Another usecase) as (UC2)
+:Main Admin: as Admin
+Admin --> (UC2)
+@enduml

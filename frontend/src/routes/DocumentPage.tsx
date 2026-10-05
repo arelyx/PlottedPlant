@@ -3,7 +3,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import Editor, { type OnMount } from "@monaco-editor/react";
 import type * as Monaco from "monaco-editor";
 import type * as Y from "yjs";
-import { registerPlantUMLLanguage } from "@/lib/plantuml-monaco";
+import {
+  PLANTUML_EDITOR_OPTIONS,
+  plantumlTheme,
+  registerPlantUMLLanguage,
+} from "@/lib/plantuml-language";
+import { engineErrorMarkers } from "@/lib/plantuml-language/monaco/authoring";
 import {
   Panel,
   Group,
@@ -167,26 +172,14 @@ export function DocumentPage() {
         if (monacoRef.current && editorRef.current) {
           const model = editorRef.current.getModel();
           if (model) {
-            if (result.error && !result.error.transient) {
-              // Clamp to the model's real line range — a reported line past
-              // the current line count makes getLineMaxColumn throw.
-              const errorLine = Math.min(
-                Math.max(result.error.line || 1, 1),
-                model.getLineCount(),
-              );
-              monacoRef.current.editor.setModelMarkers(model, "plantuml", [
-                {
-                  severity: monacoRef.current.MarkerSeverity.Error,
-                  message: result.error.message,
-                  startLineNumber: errorLine,
-                  startColumn: 1,
-                  endLineNumber: errorLine,
-                  endColumn: model.getLineMaxColumn(errorLine),
-                },
-              ]);
-            } else {
-              monacoRef.current.editor.setModelMarkers(model, "plantuml", []);
-            }
+            // One marker on the text of the failing line, unless the lint already explains it.
+            monacoRef.current.editor.setModelMarkers(
+              model,
+              "plantuml",
+              result.error && !result.error.transient
+                ? engineErrorMarkers(monacoRef.current, model, result.error)
+                : [],
+            );
           }
         }
       }, debounceMs);
@@ -339,8 +332,6 @@ export function DocumentPage() {
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
-
-    registerPlantUMLLanguage(monaco);
 
     // Track cursor position
     editor.onDidChangeCursorPosition((e) => {
@@ -612,9 +603,11 @@ export function DocumentPage() {
                       height="100%"
                       defaultValue={doc.content}
                       language="plantuml"
-                      theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
+                      theme={plantumlTheme(resolvedTheme)}
+                      beforeMount={registerPlantUMLLanguage}
                       onMount={handleEditorMount}
                       options={{
+                        ...PLANTUML_EDITOR_OPTIONS,
                         readOnly: editorReadOnly,
                         minimap: { enabled: preferences.editor_minimap },
                         fontSize: preferences.editor_font_size,

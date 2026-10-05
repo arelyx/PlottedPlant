@@ -1,0 +1,17 @@
+@startchen
+entity DIRECTOR {
+  Number <<key>>
+  Name {
+    Fname
+    Lname
+  }
+  Age <<derived>>
+}
+entity MOVIE {
+  Code
+}
+relationship DIRECTS {
+}
+DIRECTS -1- DIRECTOR
+DIRECTS -N- MOVIE
+@endchen

@@ -1,0 +1,22 @@
+@startuml
+left to right direction
+actor Customer
+actor Admin
+
+rectangle "Online Store" {
+    usecase "Browse Products" as UC1
+    usecase "Place Order" as UC2
+    usecase "Track Order" as UC3
+    usecase "Manage Products" as UC4
+    usecase "View Reports" as UC5
+    usecase "Make Payment" as UC6
+}
+
+Customer --> UC1
+Customer --> UC2
+Customer --> UC3
+UC2 ..> UC6 : <<include>>
+
+Admin --> UC4
+Admin --> UC5
+@enduml

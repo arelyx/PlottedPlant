@@ -1,0 +1,28 @@
+@startsalt
+title Settings
+{+
+  {* File | Edit | View | Help }
+  {/ <b>General | Account | Advanced }
+  {
+    Name     | "Ada Lovelace       "
+    Language | ^English^
+    Theme    | { (X) Light | () Dark }
+    Updates  | { [X] Automatic | [] Beta channel }
+  }
+  ==
+  {#
+    . | Mon | Tue
+    Morning | 09:00 | 10:30
+    Evening | 18:00 | *
+  }
+  {T
+    + Projects
+    ++ Website
+    +++ index.html
+    ++ Notes
+  }
+  --
+  <&warning> Changes apply after restart
+  { [Cancel] | [  **Save**  ] }
+}
+@endsalt

@@ -1,0 +1,16 @@
+Some leading prose before the first diagram.
+@startuml
+Alice -> Bob: hi
+Bob --> Alice: hello
+@enduml
+
+@startuml
+class Alice
+class Bob
+Alice --> Bob
+@enduml
+
+@startmindmap
+* Alice
+** Bob
+@endmindmap

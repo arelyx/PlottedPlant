@@ -1,0 +1,15 @@
+@startuml
+start
+:Receive request;
+:Validate input;
+
+if (Valid?) then (yes)
+    :Process data;
+    :Save to database;
+    :Return success;
+else (no)
+    :Return error;
+endif
+
+stop
+@enduml

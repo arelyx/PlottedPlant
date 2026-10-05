@@ -1,0 +1,23 @@
+@startuml
+participant Client
+participant Server
+participant Cache
+
+Client -> Server: GET /resource
+
+alt Cache hit
+    Server -> Cache: lookup(key)
+    Cache --> Server: cached data
+    Server --> Client: 200 OK (cached)
+else Cache miss
+    Server -> Cache: lookup(key)
+    Cache --> Server: null
+    Server -> Server: compute result
+    Server -> Cache: store(key, result)
+    Server --> Client: 200 OK
+end
+
+loop Every 60 seconds
+    Server -> Cache: cleanup expired
+end
+@enduml

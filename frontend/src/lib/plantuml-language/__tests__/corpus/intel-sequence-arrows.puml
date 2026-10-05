@@ -1,0 +1,19 @@
+@startuml
+autonumber
+hide footbox
+Alice ->> Bob : async
+Alice -\ Bob : half
+Alice <-> Bob : both
+Alice ->x Bob : lost
+Alice ->o Bob : circle
+Bob -->> Alice : reply
+[-> Alice : incoming
+Alice ->] : outgoing
+Alice -> Alice : self
+Alice -[#blue]> Bob : coloured
+return done
+...
+||45||
+Alice -> Bob ** : create
+Alice -> Bob !! : destroy
+@enduml

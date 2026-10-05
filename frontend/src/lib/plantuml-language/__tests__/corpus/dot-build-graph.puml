@@ -1,0 +1,13 @@
+@startdot
+digraph build {
+  rankdir=LR;
+  node [shape=box, style="rounded,filled", fillcolor="#EEF"];
+  src -> compile -> test;
+  test -> package [label="on success", color=green];
+  test -> report [style=dashed];
+  subgraph cluster_ci {
+    label = "CI";
+    compile; test;
+  }
+}
+@enddot

@@ -1,0 +1,35 @@
+@startuml
+hide empty description
+[*] --> Stopped
+state "Now Playing" as Playing #LightGreen {
+  [*] --> Buffering
+  Buffering --> Streaming : buffer full
+  Streaming --> Buffering : underrun [bitrate < 64]
+  --
+  [*] -> VolumeNormal
+  VolumeNormal -> Muted : mute
+  Muted -> VolumeNormal : unmute
+}
+state Paused
+state Choice <<choice>>
+state fork_state <<fork>>
+state join_state <<join>>
+state History <<history>>
+
+Stopped --> Playing : play / load(track)
+Playing --> Paused : pause
+Paused --> Playing : play
+Paused -[#red,dashed]-> Stopped : stop
+Playing -down-> Choice : track ended
+Choice --> Playing : [queue not empty]
+Choice --> Stopped : [queue empty]
+Playing --> [H] : resume
+Stopped --> [*]
+Stopped : entry / release decoder
+Stopped : exit / acquire decoder
+state Paused : shows position 01:23
+note right of Paused : Paused --> Stopped after 5 min
+note left of Playing
+  Two **concurrent** regions
+end note
+@enduml

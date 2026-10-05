@@ -1,0 +1,41 @@
+@startuml
+|Customer|
+start
+:Place order;
+|#LightBlue|Warehouse|
+partition "Fulfilment" {
+  if (In stock?) then (yes)
+    :Pick items;
+    fork
+      :Pack;
+    fork again
+      :Print label;
+    end fork
+  elseif (Backorder?) then (maybe)
+    :Wait;
+  else (no)
+    :Cancel order;
+    stop
+  endif
+}
+while (More parcels?) is (yes)
+  :Ship parcel;
+endwhile (no)
+repeat
+  :Notify
+  customer;
+backward :Retry;
+repeat while (Failed?) is (yes) not (no)
+switch (Result?)
+case (A)
+  :Path A;
+case (B)
+  :Path B;
+endswitch
+|Customer|
+note right
+  A -> B text in a note
+end note
+:Receive;
+stop
+@enduml

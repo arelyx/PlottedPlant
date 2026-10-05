@@ -1,0 +1,5 @@
+@startuml
+actor Customer
+usecase Checkout
+Customer -> Checkout
+@enduml

@@ -1,0 +1,37 @@
+@startuml
+actor Admin
+node "Web Tier" as web {
+  artifact "app.war" as war
+  agent Monitor
+}
+node db_host {
+  database Postgres
+  storage Backups
+}
+cloud CDN
+frame Legacy {
+  card Mainframe
+  file "config.yml" as cfg
+  stack Layers
+  hexagon Hex
+  person Ops
+  process Proc
+  label Lbl
+  collections Coll
+  boundary Edge
+  control Ctl
+  entity Ent
+  interface Ifc
+  rectangle Rect
+  folder Dir
+  queue Q
+  usecase UC
+  action Act
+}
+Admin --> web
+war --> Postgres : JDBC
+Postgres --> Backups
+CDN --> war
+Mainframe -- cfg
+web -[#red,dashed]-> db_host : replicate
+@enduml

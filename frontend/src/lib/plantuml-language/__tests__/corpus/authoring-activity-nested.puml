@@ -1,0 +1,52 @@
+@startuml
+|Customer|
+start
+:Open the app;
+partition "Checkout" {
+  if (cart empty?) then (yes)
+    :Show hint;
+    stop
+  elseif (logged in?) then (yes)
+    :Load profile;
+  else (no)
+    :Ask to log in
+      or continue
+        as guest;
+  endif
+  switch (payment)
+  case (card)
+    :Charge card;
+  case (invoice)
+    :Create invoice;
+  endswitch
+}
+|Warehouse|
+group Fulfilment
+  while (items left?) is (yes)
+    repeat
+      :Pick item;
+      backward :Scan again;
+    repeat while (scan failed?) is (yes) not (no)
+    fork
+      :Pack;
+    fork again
+      :Print label;
+      note right
+        Label format:
+        * A6
+        ** thermal
+      end note
+    end fork
+  endwhile (no)
+end group
+split
+  :Notify customer;
+  -> by mail
+  or by text;
+split again
+  :Update stock;
+  detach
+end split
+floating note left: done
+end
+@enduml

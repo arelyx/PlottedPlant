@@ -1,0 +1,24 @@
+@startuml
+package "Frontend" {
+    [React App] as react
+    [API Client] as client
+}
+
+package "Backend" {
+    [REST API] as api
+    [Auth Service] as auth
+    [Business Logic] as logic
+}
+
+package "Data Layer" {
+    [PostgreSQL] as db
+    [Redis Cache] as cache
+}
+
+react --> client
+client --> api : HTTPS
+api --> auth
+api --> logic
+logic --> db
+logic --> cache
+@enduml

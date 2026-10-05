@@ -1,0 +1,77 @@
+@startuml checkout
+' Checkout across services, with every common sequence construct
+title Checkout flow (release **2026-03-01**)
+header Payments team
+footer Page %page% of %lastpage%
+
+skinparam sequenceMessageAlign center
+autonumber 10 5 "<b>[000]"
+
+actor Customer as C
+participant "Web App" as Web <<SPA>> #LightBlue
+box "Backend" #F5F5F5
+  participant "Order API" as API order 20
+  database "Orders DB" as DB
+  queue Events
+end box
+collections Workers
+
+C -> Web ++ : Click **Pay**
+Web ->> API : POST /orders\n(total: 42.50)
+activate API #Gold
+API -> DB : insert order 2026-03-01
+DB --> API : id = 1042
+API -[#green,bold]> Events : order.created
+API --> Web -- : 201 Created
+Web --> C -- : Show //receipt//
+
+== Fulfilment ==
+
+alt #LightGreen stock available
+  Events ->o Workers : reserve items
+  Workers -\ API : reserved
+else #Pink out of stock
+  Workers ->x API : reservation failed
+  loop 3 times
+    API -> API : retry with back-off
+  end
+else timeout
+  ... 5 minutes later ...
+  API <-> Events : reconcile
+end
+
+opt gift wrap
+  Web -> API : add wrapping
+end
+
+par notify
+  API ->> C : e-mail
+else
+  API ->> C : push message
+end
+
+group Audit [nightly]
+  API -> DB : archive
+end
+
+[-> API : external webhook
+API ->] : callback
+|||
+note over API, DB #LightYellow
+  Orders are **immutable** once //paid//.
+  * retries are idempotent
+  * see [[https://example.com/runbook the runbook]]
+end note
+hnote over Workers : idle
+rnote right of C : <color:red>refunds</color> take 3-5 days
+ref over Web, API : Authentication, see login diagram
+note left of C
+  it's "quoted" -> not an arrow
+end note
+create participant Receipt
+API -> Receipt ** : create
+destroy Receipt
+return done
+newpage Second page
+C -> Web : Log out
+@enduml

@@ -1,0 +1,31 @@
+@startuml
+package "Front End" {
+  component [Web App] as Web
+  [Mobile App]
+  interface "REST API" as API
+  () "GraphQL" as GQL
+}
+node "App Server" as Server {
+  component Backend {
+    port p1
+    portin pin
+    portout pout
+  }
+  [Scheduler]
+}
+database "Main DB" as DB {
+  folder "Schemas" {
+    [Users]
+  }
+}
+cloud Internet
+queue Events
+Web --> API
+[Mobile App] ..> GQL : uses
+API - Backend
+Backend --> DB
+Backend --> Events
+[Scheduler] --> [Users]
+Internet --> Web
+note left of Web : [Web App] is here
+@enduml

@@ -1,0 +1,24 @@
+@startuml
+start
+:Initialize build;
+
+fork
+    :Compile source;
+fork again
+    :Run linter;
+fork again
+    :Run type checker;
+end fork
+
+:Run unit tests;
+
+if (All passed?) then (yes)
+    :Build Docker image;
+    :Push to registry;
+    :Deploy to staging;
+    stop
+else (no)
+    :Send failure notification;
+    stop
+endif
+@enduml

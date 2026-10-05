@@ -1,0 +1,50 @@
+@startuml
+package "Domain" #DDDDDD {
+  class Order {
+    +id: Long
+    --
+    +total(): Money
+    {static} +create(): Order
+    |_ lines
+      |_ product
+  }
+
+  note left of Order
+    Root aggregate.
+    * invariant one
+    * invariant two
+  end note
+
+  note right of Order::total
+    Sum of all lines
+  end note
+
+  namespace billing {
+    abstract class Invoice {
+      {abstract} +pay()
+    }
+    enum Status {
+      OPEN
+      PAID
+    }
+  }
+
+  together {
+    interface Repo
+    class SqlRepo
+  }
+}
+
+Order --> billing.Invoice
+note on link #lightgreen
+  created at checkout
+end note
+
+note as Floating
+  Not attached
+  to anything
+end note
+
+note "single line" as Single
+Floating .. Order
+@enduml
