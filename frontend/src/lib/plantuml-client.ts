@@ -29,6 +29,8 @@ export interface PreviewRenderResult {
   error?: RenderErrorInfo;
   /** True when a newer render replaced this one before it ran — discard. */
   superseded?: boolean;
+  /** Internal: the in-browser engine cannot draw this diagram type; ask the server. */
+  needsServer?: boolean;
   engine: "client" | "server";
 }
 
@@ -153,10 +155,14 @@ function fromServerError(payload: unknown): RenderErrorInfo {
  * pages. The has-background guard future-proofs against the engine gaining
  * background support later.
  */
-function processEngineSvg(svg: string): { svg?: string; error?: RenderErrorInfo } {
+function processEngineSvg(svg: string): { svg?: string; error?: RenderErrorInfo; unsupported?: boolean } {
   const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
   const root = doc.documentElement;
   if (root.tagName !== "svg") return { svg }; // parse failure — pass through
+
+  // The TeaVM build lacks some diagram types the server renders (Salt, Chen,
+  // ditaa, DOT, math, LaTeX) and answers with an explanatory image, not an error.
+  if (/Diagram not supported by this release/.test(root.textContent ?? "")) return { unsupported: true };
 
   const error = detectErrorIn(doc);
   if (error) return { error };
@@ -190,7 +196,10 @@ function runEngineRender(source: string): Promise<PreviewRenderResult> {
         // On an error image, processEngineSvg returns only the error (no
         // svg), so callers keep the last good diagram — matching the server
         // 422 behavior.
-        (svg) => finish({ ...processEngineSvg(svg), engine: "client" }),
+        (svg) => {
+          const { unsupported, ...result } = processEngineSvg(svg);
+          finish({ ...result, engine: "client", needsServer: unsupported });
+        },
         (err) => finish({ error: { message: String(err) || "Render failed" }, engine: "client" }),
       );
     } catch (err) {
@@ -198,6 +207,11 @@ function runEngineRender(source: string): Promise<PreviewRenderResult> {
     }
   });
 }
+
+// Sub-diagrams inside @startuml that the TeaVM build rejects as syntax errors
+// although the server renders them. An error on such a document is re-checked
+// on the server instead of being trusted.
+const CLIENT_ENGINE_GAPS = /^[ \t]*(?:nwdiag[ \t]*\{|salt[ \t]*(?:\{|$))/m;
 
 // Serialized render queue with latest-wins coalescing: at most one render
 // runs and at most one waits; a newer request replaces the waiting one, whose
@@ -209,9 +223,12 @@ async function pumpQueue(): Promise<void> {
   while (queued) {
     const job = queued;
     queued = null;
-    const result = engineFailed
+    let result = engineFailed
       ? await renderOnServer(job.source)
       : await runEngineRender(job.source);
+    if (result.needsServer || (result.error && !result.error.transient && CLIENT_ENGINE_GAPS.test(job.source))) {
+      result = await renderOnServer(job.source);
+    }
     job.resolve(result);
   }
   renderRunning = false;
